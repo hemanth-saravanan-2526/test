@@ -1,0 +1,66 @@
+{
+  "root_cause": "The test run failed immediately because generated_scraper.py contains invalid Python syntax at page_snapshot(): `status = page.request? if False else None`. The zero-row result is therefore a compile-time failure, not a verified selector or anti-bot failure. Live inspection also shows that the tested keyword `Hotel` returns `0 registos`, so it is not suitable for validating listing extraction.",
+  "diagnostic_findings": {
+    "root_cause": "The test run failed immediately because generated_scraper.py contains invalid Python syntax at page_snapshot(): `status = page.request? if False else None`. The zero-row result is therefore a compile-time failure, not a verified selector or anti-bot failure. Live inspection also shows that the tested keyword `Hotel` returns `0 registos`, so it is not suitable for validating listing extraction.",
+    "page_type": "listing",
+    "cookie_banner": "No cookie banner, popup, modal overlay, or consent challenge was observed; no dismissal was required.",
+    "working_listing_selectors": {
+      "results_table": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos",
+      "result_rows": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos > tbody > tr:not(:has(td[colspan='8']))",
+      "headers": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos thead th",
+      "search_input": "#RichWidgets_wt104_block_wtMainContent_wt170",
+      "search_button": "#RichWidgets_wt104_block_wtMainContent_wt201",
+      "clear_button": "#RichWidgets_wt104_block_wtMainContent_wt22",
+      "detail_links": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tbody tr a",
+      "export_link": "not observed on the zero-result page"
+    },
+    "working_detail_selectors": "Unverified: no live listing row or detail page was reached. The result table header confirms the intended columns, including the final `detalhe` column, but no detail anchors were present.",
+    "working_price_selector": "not applicable; this is an accommodation registry, not a commerce page, and no price/buy-box container was observed.",
+    "search_flow": "Verified ASP.NET postback flow: fill `#RichWidgets_wt104_block_wtMainContent_wt170`, click `#RichWidgets_wt104_block_wtMainContent_wt201`, then wait for `#RichWidgets_wt104_block_wtMainContent_wttrRegistos` and the record-count text. Reset with `#RichWidgets_wt104_block_wtMainContent_wt22` before the next keyword. `Hotel` produced `0 registos`.",
+    "navigation_path": "Unverified because the tested search returned no rows. Intended path is search form -> result table -> a detail link in the `detalhe` column, but no live detail link was available.",
+    "network_api": "none observed",
+    "sample_extracted_fields": {
+      "page_title": "Pesquisa RNET | RNT",
+      "http_status": 200,
+      "record_count": "0 registos",
+      "table_headers": [
+        "N\u00ba",
+        "Data",
+        "Nome",
+        "Tipologia",
+        "Capacidade",
+        "Localiza\u00e7\u00e3o",
+        "Certifica\u00e7\u00f5es",
+        "detalhe"
+      ],
+      "empty_state": "Nenhum registo para mostrar...",
+      "tested_keyword": "Hotel"
+    },
+    "diagnostic_notes": [
+      "Remove or replace the invalid `page.request?` expression; it is the direct cause of exit code 1.",
+      "Do not diagnose zero rows from the empty initial page or from the `Hotel` test alone; use a keyword known to return records or search without a restrictive keyword.",
+      "The table selector should target the stable ID `#RichWidgets_wt104_block_wtMainContent_wttrRegistos`.",
+      "Exclude the empty-state row containing `Nenhum registo para mostrar...` rather than treating every tbody row as a listing.",
+      "Wait for the record-count text and actual tbody rows after the ASP.NET postback before extraction.",
+      "The page uses ASP.NET state fields including `__OSVSTATE`; navigation and pagination may be postbacks rather than clean JSON requests.",
+      "The existing code's generic table-header detection was not verified against a populated result table, while the stable table ID was verified live."
+    ],
+    "confidence_notes": [
+      "No populated listing row was observed during this inspection.",
+      "No detail page, plus icon, export download, pagination control, or detail-field DOM was observed.",
+      "The `Hotel` keyword returned zero records, so selectors for row cells and detail links remain untested with real values.",
+      "No anti-bot challenge was observed, but only normal page and zero-result search states were inspected.",
+      "The direct syntax error fully explains the reported test failure independently of the live selector findings."
+    ]
+  },
+  "confidence_notes": [
+    "Removed the invalid page.request? syntax and replaced it with valid response-status handling.",
+    "Uses the verified stable ASP.NET selectors for the search field, submit button, clear button, results table, and result rows.",
+    "Treats the first Excel column as data when no recognized header exists and supports keyword, listing_url, and independent detail_url inputs.",
+    "Preserves legacy extraction fields including Title, Price, Description, Modules, Categories, and Images, while retaining additional custom input workbook sheets.",
+    "Price extraction is scoped only to explicit price/buy-box selectors and requires a currency symbol or ISO currency code; this accommodation registry did not expose a verified price field.",
+    "Fails fast on HTTP 403/429 or WAF challenge markers, records the event in Flags, and does not retry.",
+    "Zero-record runs create diagnostic_screenshot.png, log status/title, and exit with status 1.",
+    "Detail-page selectors were not verified during live inspection because the tested keyword Hotel returned zero results; detail extraction therefore uses robust label-based fallbacks and flags missing fields."
+  ]
+}

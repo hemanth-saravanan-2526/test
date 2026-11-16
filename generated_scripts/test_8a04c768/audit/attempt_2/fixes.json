@@ -1,0 +1,25 @@
+{
+  "strategy": "live_mcp_codegen_repair",
+  "working_listing_selectors": {
+    "results_table": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos",
+    "listing_rows_verified": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tr",
+    "recommended_data_rows": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tr:has(a[href*='RNET.aspx?nr='])",
+    "detail_links_verified": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos a[href*='RNET.aspx?nr=']",
+    "detail_link_id_pattern_observed": "a[id$='_wt190'][href*='RNET.aspx?nr=']",
+    "pagination_next_verified": "#RichWidgets_wt104_block_wtMainContent_RichWidgets_wt11_block_wt28.ListNavigation_Next",
+    "counter_note": "The result counter should be located by text containing 'registos'; the initial empty page did not expose a reliable .Counter_Message element in the inspected DOM."
+  },
+  "working_detail_selectors": {
+    "detail_table": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento",
+    "rnet_heading": "Use page heading/title text matching 'RNET n\u00ba'; verified title is 'RNET 13702' and body text is 'RNET n\u00ba 13702'.",
+    "registered_date": "Text node or label/value relation matching 'Registado em'; verified value '2026-10-20'.",
+    "tipologia_completa": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr:nth-of-type(1) td:nth-of-type(2)",
+    "property_name": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr:has(td:first-child:has-text('Nome')) td:nth-of-type(2)",
+    "address_location": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr:has(td:first-child:has-text('Localiza\u00e7\u00e3o')) td:nth-of-type(2)",
+    "contacts": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr:has(td:first-child:has-text('Contactos')) td:nth-of-type(2)",
+    "commercial_brand": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr:has(td:first-child:has-text('Marca comercial')) td:nth-of-type(2)",
+    "operator_tax": "Detail body text relation matching 'Entidade exploradora'; verified text '123680956 - SARA DOMINGUES'. Extract NIF/NIPC from the numeric prefix and operator from the remainder.",
+    "website": "#RichWidgets_wt13_block_wtMainContent_wt15_wt247"
+  },
+  "working_price_selector": "none; this registry contains no product pricing or buy box. Do not attempt price extraction."
+}

@@ -1,0 +1,26 @@
+{
+  "strategy": "live_mcp_codegen_repair",
+  "working_listing_selectors": {
+    "listing_table": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos",
+    "listing_rows": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tr:has(td)",
+    "detail_links": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos a[href*='RNET.aspx?nr=']",
+    "search_input": "#RichWidgets_wt104_block_wtMainContent_wtInput_FiltroTexto",
+    "search_button": "#RichWidgets_wt104_block_wtMainContent_wt201",
+    "clear_button": "#RichWidgets_wt104_block_wtMainContent_wt22",
+    "next_page": ".ListNavigation_Next"
+  },
+  "working_detail_selectors": {
+    "detail_table": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento",
+    "detail_label_value_rows": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr",
+    "tipologia": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr:has(td:first-child:has-text('Tipologia')) td:nth-child(2)",
+    "nome": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr:has(td:first-child:has-text('Nome')) td:nth-child(2)",
+    "localizacao_morada": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr:has(td:first-child:has-text('Localiza\u00e7\u00e3o')) td:nth-child(2)",
+    "contactos": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr:has(td:first-child:has-text('Contactos')) td:nth-child(2)",
+    "marca_comercial": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr:has(td:first-child:has-text('Marca comercial')) td:nth-child(2)",
+    "rnet_heading": "body",
+    "data_registo": "body",
+    "entidade_exploradora": "body",
+    "nif_nipc": "body"
+  },
+  "working_price_selector": "not applicable; this registry has no product pricing or buy-box container"
+}

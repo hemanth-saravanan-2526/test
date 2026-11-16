@@ -1,0 +1,14 @@
+{
+  "confidence_notes": [
+    "The inspection verified the ASP.NET WebForms search controls, first-page row structure, counter, detail URL pattern, and one detail page, but did not execute pagination.",
+    "The script uses Playwright because the target requires ASP.NET postbacks and browser interaction; no network API was observed.",
+    "Product IDs are consistently derived from the RNET registration number in the detail URL or heading; no SKU, MPN, or canonical slug was observed.",
+    "The target has no product prices, so no price field or price extraction is invented.",
+    "Detail label/value layouts beyond the sampled fields were not fully inspected; address, contacts, brand, operator, and tax-number extraction therefore includes low-confidence/missing-field flags.",
+    "The inspection did not test reviewer accordions or PII masking. The script skips accordion interaction and applies masking only to extracted fields whose key or value indicates review content.",
+    "Input files with recognized keyword/listing_url/detail_url headers are processed normally. If no recognized header is present, the first Excel column is treated as keyword data, including the first row.",
+    "The diagnostic zero-record flow performs a fresh target-page navigation and screenshot after the crawl, which may itself encounter anti-bot protection."
+  ],
+  "anti_bot_marker": null,
+  "total_tool_calls": 12
+}

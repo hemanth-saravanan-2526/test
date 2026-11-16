@@ -1,0 +1,15 @@
+{
+  "strategy": "live_mcp_codegen_repair",
+  "working_listing_selectors": {
+    "results_table": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos",
+    "result_rows": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos > tbody > tr:not(:has(td[colspan='8']))",
+    "headers": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos thead th",
+    "search_input": "#RichWidgets_wt104_block_wtMainContent_wt170",
+    "search_button": "#RichWidgets_wt104_block_wtMainContent_wt201",
+    "clear_button": "#RichWidgets_wt104_block_wtMainContent_wt22",
+    "detail_links": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tbody tr a",
+    "export_link": "not observed on the zero-result page"
+  },
+  "working_detail_selectors": "Unverified: no live listing row or detail page was reached. The result table header confirms the intended columns, including the final `detalhe` column, but no detail anchors were present.",
+  "working_price_selector": "not applicable; this is an accommodation registry, not a commerce page, and no price/buy-box container was observed."
+}

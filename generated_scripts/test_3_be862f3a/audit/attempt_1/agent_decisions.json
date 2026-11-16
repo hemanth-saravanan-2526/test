@@ -1,0 +1,14 @@
+{
+  "confidence_notes": [
+    "The inspection found no API, so this script deliberately uses Playwright for the server-side OutSystems/WebForms flow and BeautifulSoup for rendered HTML parsing.",
+    "Pagination next-page behavior was not tested during inspection; the script follows the observed .ListNavigation_Next selector and waits for table content changes.",
+    "Listing column order and detail label/value structure were not fully enumerated. The script first uses discovered header labels and otherwise falls back to cell order; missing or differently labeled fields may be blank and should be reviewed in Flags.",
+    "No reviewer accordion or review PII was observed. The script does not expand accordions and applies masking if review-like text is nevertheless returned.",
+    "Input inspection specified a headerless Excel file. This script therefore reads header=None and interprets the first three positional columns as keyword, listing_url, and detail_url respectively.",
+    "The required independent detail_url path is implemented and uses DIRECT_INPUT as source_listing_url.",
+    "The product identifier strategy is consistent: the nr query parameter is used when present, otherwise a deterministic SHA-256-derived URL identifier is used.",
+    "The sample records contained future-looking 2026 dates relative to the inspection context; values are preserved exactly as rendered."
+  ],
+  "anti_bot_marker": null,
+  "total_tool_calls": 11
+}

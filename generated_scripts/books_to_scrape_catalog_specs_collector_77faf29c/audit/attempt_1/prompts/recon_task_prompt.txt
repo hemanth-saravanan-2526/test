@@ -1,0 +1,57 @@
+You are inspecting a live website to gather the facts needed to build a
+Python web scraper. YOU DO NOT WRITE ANY CODE IN THIS PHASE - a separate
+step handles code generation from the findings you report here. Your only
+output is a compact JSON findings object.
+
+TARGET: https://books.toscrape.com/catalogue/category/books/travel_2/index.html
+No sample keyword given - use a representative sample item during inspection.
+
+The target above may be a listing/search page OR a single item's detail page -
+figure out which by looking at what actually renders, don't assume either way.
+
+RULES (as described by the requester, in plain language):
+- Search rules: If a keyword is provided, search or filter books by matching the title or URL slug against the keyword. If no keyword is provided, process all books listed in the category.
+- Filter rules: Ignore out-of-stock items if any are encountered. Only extract items marked 'In stock'.
+- Navigation rules: 1. On the listing page, discover all book product cards.
+2. Test multi-page pagination by clicking the 'next' button or using load_all if multiple pages are present.
+3. Navigate into each book's detail page to extract detailed table specifications and description.
+- Extraction rules (data points to capture): Extract the following data points for each product:
+- product_id: Extract the official UPC code from the Product Information table.
+- title: The full book title.
+- price: The price with currency symbol (£xx.xx) strictly anchored from the price container.
+- availability: Stock status and quantity available (e.g. 'In stock (19 available)').
+- rating: The star rating (e.g. 'Three', 'Four', or numerical 1-5).
+- product_url: Direct canonical URL of the book detail page.
+- description: The first 300 characters of the product description.
+Mask reviewer PII and skip review accordions.
+
+YOUR TASK (USING CUSTOM PLAYWRIGHT MCP TOOLBOX WITH IN-TOOL HEALING):
+1. Navigate to the target URL using `navigate(url)`.
+2. Take a `snapshot()` to inspect the real rendered structure (headings, product cards, interactive elements, JSON-LD).
+3. If search or filter interaction is required, use `type_text(selector, text, press_enter=...)` and `click(selector)`.
+   (Note: `click` automatically dismisses blocking cookie banners, overlays, and modals via in-tool healing).
+4. If testing catalog pagination or infinite scroll, use `load_all(item_selector=...)` to automatically test item growth.
+5. If you're on a listing page, identify the navigation path to detail pages and inspect a sample detail page.
+6. Stage observed sample rows using `save_items(sample_records=..., schema=..., item_selector=...)`.
+   (Note: `save_items` automatically checks for empty fields and re-evaluates selectors on the live DOM if any fields are blank).
+7. If the page is backed by an internal clean JSON/GraphQL API, record that endpoint.
+8. Do not attempt to solve CAPTCHAs or defeat anti-bot WAFs - if encountered, record the marker and halt immediately.
+
+Return your final answer as a single JSON object with exactly these keys
+(keep every value CONCISE - a few sentences or short bullet-style strings per
+key, not prose paragraphs):
+  "page_type"              - "listing" | "detail" | "both"
+  "cookie_banner"           - what was present (if anything) and how it was dismissed
+  "search_flow"             - how search/filter interaction actually works, if tested
+  "navigation_path"         - how to get from listing to detail pages
+  "listing_selectors"       - concrete selectors/patterns observed for listing items
+  "detail_selectors"        - concrete selectors/patterns observed on a detail page
+  "network_api"             - any clean JSON API endpoint observed, or "none observed"
+  "sample_extracted_fields" - a small sample of real values you actually saw, per
+                               the extraction rules above
+  "confidence_notes"        - list of strings, anything unverified or uncertain
+
+CRITICAL FORMATTING RULE: your final message must be ONLY that JSON object -
+no markdown code fences, no explanation before or after it, no prose of any
+kind outside the JSON, and no code. It must parse cleanly with Python's
+json.loads().

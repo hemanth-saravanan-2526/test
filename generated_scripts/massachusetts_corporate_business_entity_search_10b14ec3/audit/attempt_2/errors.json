@@ -1,0 +1,6 @@
+{
+  "exit_code": 1,
+  "error_summary": "[2026-10-20T09:37:23.472350+00:00] Crawl Funnel: 1 categories, 0 links discovered, 0 processed, 0 extracted.\r\n[2026-10-20T09:37:23.472350+00:00] No product records found: HTTP 200, Title: '', Screenshot: diagnostic_screenshot.png\r\n[2026-10-20T09:37:23.472350+00:00] ERROR: Zero product records were extracted. Aborting.\r\n",
+  "stderr_tail": "",
+  "stdout_tail": "[2026-10-20T09:37:23.472350+00:00] Crawl Funnel: 1 categories, 0 links discovered, 0 processed, 0 extracted.\r\n[2026-10-20T09:37:23.472350+00:00] No product records found: HTTP 200, Title: '', Screenshot: diagnostic_screenshot.png\r\n[2026-10-20T09:37:23.472350+00:00] ERROR: Zero product records were extracted. Aborting.\r\n"
+}

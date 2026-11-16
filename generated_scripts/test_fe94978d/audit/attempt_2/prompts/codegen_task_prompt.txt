@@ -1,0 +1,834 @@
+You are repairing a Python web scraper that failed or produced zero records during an automated test run.
+A live diagnostic inspection session was just conducted using browser tools to verify the live website state.
+Your task is to synthesize a complete, fully repaired, regression-proof scraper.
+
+CRITICAL REGRESSION INVARIANTS:
+1. DO NOT DROP PREVIOUSLY WORKING FIELDS. You MUST preserve all existing extraction fields (e.g. Title, Price, Description, Modules, Categories, Images). Never blank out or drop Title, Price, or custom modules!
+2. MULTI-SHEET PRESERVATION: You MUST preserve all existing Excel sheets (
+- EXISTING SHEETS: ['Extracted Data', 'Flags']). Never drop custom sheets like 'Recommendations' or 'Variants'!
+3. CANONICAL PRODUCT IDENTIFIERS: Output 'product_id', 'product_url', and 'source_listing_url'. Do not duplicate 'Source URL'.
+4. STRICT PRICE SCOPING: Extract prices only from within product buy-box / pricing elements. NEVER extract digits from product titles (e.g. '250 North American Birds Sound Book' is NOT price 250!). Anchor to currency symbols ($xx.xx).
+5. EXCEL 32K LIMIT: Include and use `sanitize_cell_value(val, max_len=32000)` on all output values before Excel export.
+6. CRAWL FUNNEL & FAIL LOUDLY: Log crawl funnel metrics. If 0 records are extracted, exit with sys.exit(1) and take a diagnostic screenshot.
+7. CLICK TELEMETRY: Wrap clicks in try/except, log real errors, and provide overlay dismissal / JS evaluate fallback.
+8. BOT PROTECTION: Classify 403 or WAF challenge pages as 'Blocked by bot protection' and halt immediately without retrying.
+
+TARGET: https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx?FiltroVisivel=True
+RULES:
+- Search rules: *Read Inputs: Read each search keyword one by one from Column A of input.xlsx (treat the first row as data if there is no column header).
+*Search Field: Type the keyword into the "Empreendimento Nome/Marca" text box.
+*Submit: Click the green "Pesquisar" button.
+*Wait: Wait until the results table and record count (e.g., "1 a 10 de ... registos") finish loading before proceeding.
+*Reset for Next Input: When moving to the next keyword, clear the search text box or click "Limpar" before typing the new keyword.
+- Filter rules: none specified
+- Navigation rules: *Process Listings: On the current search results page, open and extract the detail page data for all 10 listings one by one.
+*Paginate: After extracting all listings on the current page, check the pagination at the bottom. If the "próximo" link is available and active, click "próximo", wait for the next set of 10 rows to load, and repeat the extraction.
+*Next Keyword: Once all result pages for the current search keyword are completed, return to the search form, clear the input box, enter the next keyword from input.xlsx, and repeat the entire workflow.
+- Extraction rules: *Download Excel File:
+For each search keyword, click "Exportar detalhe registos" located above the table.
+Save the downloaded file using the search keyword as the file name.
+
+*List Page Data: From the results table on every page, extract:
+Nº (Registration number)
+Data (Registration date)
+Nome (Property name)
+Tipologia (Accommodation type and stars)
+Capacidade (Number shown under the bed icon)
+Localização (Location / municipality)
+Certificações (Quality or sustainability certification)
+
+*Detail Page Data: Click the + icon next to each listing (open in a new tab to avoid losing your place) and extract:
+RNET nº (Located in the top heading)
+Data de Registo (Date after "Registado em")
+Tipologia Completa (Full property category)
+Morada e Código Postal (Street address, postal code, and municipality)
+Contactos (Phone number, email, and website)
+Marca Comercial (Brand or commercial name)
+Entidade Exploradora (Operating company name)
+NIF / NIPC (VAT / tax number found under "Entidade exploradora")
+Mask reviewer PII and skip review accordions.
+
+FAILED TEST RUN TELEMETRY:
+- Exit Code: 1
+- Extracted Rows: 0
+- Failure Summary:   File "C:\Users\Mob260005997\Scraper_studio\generated_scripts\test_fe94978d\generated_scraper.py", line 147
+    status = page.request? if False else None
+                         ^
+SyntaxError: invalid syntax
+
+
+PRIOR REPAIR ATTEMPTS & CUMULATIVE OUTCOMES (CONTEXT RETENTION ACROSS RETRIES):
+- Attempt 1: Error:  | Prior Diagnosis:  | Fixes Tried: 
+CRITICAL: Analyze why previous attempts failed. Do NOT repeat strategies or selectors that previously failed.
+
+- Traceback / Error:
+```
+  File "C:\Users\Mob260005997\Scraper_studio\generated_scripts\test_fe94978d\generated_scraper.py", line 147
+    status = page.request? if False else None
+                         ^
+SyntaxError: invalid syntax
+
+```
+- Standard Output:
+```
+
+```
+
+LIVE DIAGNOSTIC FINDINGS (VERIFIED ON LIVE DOM VIA BROWSER TOOLS):
+{
+  "root_cause": "The test run failed immediately because generated_scraper.py contains invalid Python syntax at page_snapshot(): `status = page.request? if False else None`. The zero-row result is therefore a compile-time failure, not a verified selector or anti-bot failure. Live inspection also shows that the tested keyword `Hotel` returns `0 registos`, so it is not suitable for validating listing extraction.",
+  "page_type": "listing",
+  "cookie_banner": "No cookie banner, popup, modal overlay, or consent challenge was observed; no dismissal was required.",
+  "working_listing_selectors": {
+    "results_table": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos",
+    "result_rows": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos > tbody > tr:not(:has(td[colspan='8']))",
+    "headers": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos thead th",
+    "search_input": "#RichWidgets_wt104_block_wtMainContent_wt170",
+    "search_button": "#RichWidgets_wt104_block_wtMainContent_wt201",
+    "clear_button": "#RichWidgets_wt104_block_wtMainContent_wt22",
+    "detail_links": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tbody tr a",
+    "export_link": "not observed on the zero-result page"
+  },
+  "working_detail_selectors": "Unverified: no live listing row or detail page was reached. The result table header confirms the intended columns, including the final `detalhe` column, but no detail anchors were present.",
+  "working_price_selector": "not applicable; this is an accommodation registry, not a commerce page, and no price/buy-box container was observed.",
+  "search_flow": "Verified ASP.NET postback flow: fill `#RichWidgets_wt104_block_wtMainContent_wt170`, click `#RichWidgets_wt104_block_wtMainContent_wt201`, then wait for `#RichWidgets_wt104_block_wtMainContent_wttrRegistos` and the record-count text. Reset with `#RichWidgets_wt104_block_wtMainContent_wt22` before the next keyword. `Hotel` produced `0 registos`.",
+  "navigation_path": "Unverified because the tested search returned no rows. Intended path is search form -> result table -> a detail link in the `detalhe` column, but no live detail link was available.",
+  "network_api": "none observed",
+  "sample_extracted_fields": {
+    "page_title": "Pesquisa RNET | RNT",
+    "http_status": 200,
+    "record_count": "0 registos",
+    "table_headers": [
+      "N\u00ba",
+      "Data",
+      "Nome",
+      "Tipologia",
+      "Capacidade",
+      "Localiza\u00e7\u00e3o",
+      "Certifica\u00e7\u00f5es",
+      "detalhe"
+    ],
+    "empty_state": "Nenhum registo para mostrar...",
+    "tested_keyword": "Hotel"
+  },
+  "diagnostic_notes": [
+    "Remove or replace the invalid `page.request?` expression; it is the direct cause of exit code 1.",
+    "Do not diagnose zero rows from the empty initial page or from the `Hotel` test alone; use a keyword known to return records or search without a restrictive keyword.",
+    "The table selector should target the stable ID `#RichWidgets_wt104_block_wtMainContent_wttrRegistos`.",
+    "Exclude the empty-state row containing `Nenhum registo para mostrar...` rather than treating every tbody row as a listing.",
+    "Wait for the record-count text and actual tbody rows after the ASP.NET postback before extraction.",
+    "The page uses ASP.NET state fields including `__OSVSTATE`; navigation and pagination may be postbacks rather than clean JSON requests.",
+    "The existing code's generic table-header detection was not verified against a populated result table, while the stable table ID was verified live."
+  ],
+  "confidence_notes": [
+    "No populated listing row was observed during this inspection.",
+    "No detail page, plus icon, export download, pagination control, or detail-field DOM was observed.",
+    "The `Hotel` keyword returned zero records, so selectors for row cells and detail links remain untested with real values.",
+    "No anti-bot challenge was observed, but only normal page and zero-result search states were inspected.",
+    "The direct syntax error fully explains the reported test failure independently of the live selector findings."
+  ]
+}
+
+PRIOR INSPECTION FINDINGS:
+{
+  "generated_code": "import argparse\nimport asyncio\nimport hashlib\nimport json\nimport re\nimport sys\nfrom datetime import datetime\n\nimport pandas as pd\nfrom bs4 import BeautifulSoup\nfrom playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError\n\nTARGET_URL = \"https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx?FiltroVisivel=True\"\nSEARCH_INPUT = \"#RichWidgets_wt104_block_wtMainContent_wt170\"\nSEARCH_BUTTON = \"#RichWidgets_wt104_block_wtMainContent_wt201\"\nCLEAR_BUTTON = \"#RichWidgets_wt104_block_wtMainContent_wt22\"\n\n\ndef log(message):\n    print(f\"[{datetime.now().isoformat(timespec='seconds')}] {message}\", flush=True)\n\n\ndef sanitize_cell_value(val, max_len=32000):\n    if val is None:\n        return \"\"\n    if isinstance(val, (dict, list)):\n        s = json.dumps(val, ensure_ascii=False)\n    else:\n        s = str(val)\n    if len(s) > max_len:\n        return s[:max_len - 35] + \"... [TRUNCATED_EXCEL_LIMIT]\"\n    return s\n\n\ndef clean(value):\n    if value is None or pd.isna(value) or str(value).strip().lower() in (\"\", \"nan\", \"none\", \"null\"):\n        return \"\"\n    try:\n        if pd.isna(value):\n            return \"\"\n    except (TypeError, ValueError):\n        pass\n    value = str(value).strip()\n    if value.lower() in {\"nan\", \"none\", \"null\"}:\n        return \"\"\n    return value\n\n\ndef value_from_row(row, name):\n    if name not in row:\n        return \"\"\n    return clean(row[name])\n\n\ndef mask_review_text(text):\n    text = re.sub(r\"[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}\", \"***@***.***\", text)\n\n    def mask_name(match):\n        parts = match.group(0).split()\n        return \" \".join((p[0] + \"***\" if p else p) for p in parts[:-1]) + (\" \" if len(parts) > 1 else \"\") + (parts[-1][0] + \".\" if parts else \"\")\n\n    return re.sub(r\"\\b[A-Z\u00c1\u00c0\u00c3\u00c2\u00c9\u00ca\u00cd\u00d3\u00d4\u00d5\u00da\u00c7][a-z\u00e1\u00e0\u00e3\u00e2\u00e9\u00ea\u00ed\u00f3\u00f4\u00f5\u00fa\u00e7]+\\s+[A-Z\u00c1\u00c0\u00c3\u00c2\u00c9\u00ca\u00cd\u00d3\u00d4\u00d5\u00da\u00c7][a-z\u00e1\u00e0\u00e3\u00e2\u00ea\u00ed\u00f3\u00f4\u00f5\u00fa\u00e7]+\\b\", mask_name, text)\n\n\ndef canonical_id(url):\n    return \"url-\" + hashlib.sha256(url.encode(\"utf-8\")).hexdigest()[:20]\n\n\ndef safe_title(soup):\n    return (soup.title.get_text(strip=True) if getattr(soup, \"title\", None) else \"\") if getattr(soup, \"title\", None) else \"\"\n\n\ndef soup_text(soup):\n    return soup.get_text(\"\\n\", strip=True).replace(\"\\xa0\", \" \")\n\n\ndef read_inputs(path):\n    try:\n        input_df = pd.read_excel(path).fillna(\"\")\n    except Exception as exc:\n        log(f\"Unable to read input workbook: {exc}\")\n        raise\n    known = {\"keyword\", \"listing_url\", \"detail_url\"}\n    normalized = {str(c).strip().lower() for c in input_df.columns}\n    if not normalized.intersection(known):\n        raw = pd.read_excel(path, header=None).fillna(\"\")\n        input_df = pd.DataFrame({\"keyword\": raw.iloc[:, 0] if not raw.empty else []}).fillna(\"\")\n    else:\n        rename = {c: str(c).strip().lower() for c in input_df.columns}\n        input_df = input_df.rename(columns=rename)\n    for col in known:\n        if col not in input_df.columns:\n            input_df[col] = \"\"\n    return input_df.fillna(\"\")\n\n\ndef detect_anti_bot_signals(status, html):\n    markers = (\n        \"cloudflare turnstile\", \"cf-browser-verification\", \"ray id:\", \"just a moment...\",\n        \"datadome\", \"perimeterx\", \"px-captcha\", \"distil networks\", \"press & hold\",\n        \"incapsula\", \"_incapsula_resource\", \"imperva\", \"incident id\", \"kasada\",\n        \"akamai\", \"shieldsquare\", \"security challenge\", \"pardon our interruption\",\n        \"potential security risk\", \"detected automated scripts\", \"additional security check\",\n        \"i am human\", \"hcaptcha\", \"access denied\", \"robot or human\"\n    )\n    text = (html or \"\").lower()\n    found = [marker for marker in markers if marker in text]\n    return status in {403, 429} or bool(found), found\n\n\nasync def dismiss_cookie_banner(page):\n    for selector in [\n        \"button:has-text('Accept')\", \"button:has-text('Aceitar')\",\n        \"button:has-text('Concordo')\", \"[id*='cookie' i] button\",\n        \"[class*='cookie' i] button\"\n    ]:\n        try:\n            loc = page.locator(selector).first\n            if await loc.is_visible(timeout=800):\n                await loc.click(timeout=1500)\n                return\n        except Exception:\n            continue\n\n\nasync def safe_click(page, locator, selector, flags, url):\n    try:\n        await locator.click(timeout=5000)\n        return True\n    except Exception as exc:\n        log(f\"Click blocked on locator '{selector}': {exc}\")\n        flags.append({\"Type\": \"Click Intercepted\", \"URL\": url, \"Message\": f\"Element {selector} blocked: {str(exc)[:200]}\"})\n        try:\n            await page.keyboard.press(\"Escape\")\n            await locator.click(timeout=2000)\n            return True\n        except Exception:\n            try:\n                await locator.evaluate(\"el => el.click()\")\n                return True\n            except Exception:\n                return False\n\n\nasync def page_snapshot(page):\n    html = await page.content()\n    status = page.request? if False else None\n    return html, status\n\n\ndef extract_table_rows(soup):\n    table = None\n    for candidate in soup.find_all(\"table\"):\n        headers = [clean(x.get_text(\" \", strip=True)).lower() for x in candidate.find_all(\"th\")]\n        if any(\"nome\" in h for h in headers) and any(\"local\" in h for h in headers):\n            table = candidate\n            break\n    if table is None:\n        return []\n    headers = [clean(x.get_text(\" \", strip=True)) for x in table.find_all(\"th\")]\n    rows = []\n    for tr in table.find_all(\"tr\"):\n        cells = tr.find_all([\"td\", \"th\"])\n        if not cells or cells[0].name == \"th\":\n            continue\n        values = [clean(c.get_text(\" \", strip=True)) for c in cells]\n        row = {headers[i] if i < len(headers) else f\"column_{i + 1}\": values[i] for i in range(len(values))}\n        detail = tr.find(\"a\", href=True)\n        if detail:\n            row[\"__detail_href\"] = detail.get(\"href\", \"\")\n        row[\"__detail_anchor\"] = str(tr)\n        rows.append(row)\n    return rows\n\n\ndef mapped_row(row):\n    result = {}\n    for key, value in row.items():\n        if key.startswith(\"__\"):\n            continue\n        low = key.lower()\n        if low.startswith(\"n\u00ba\") or low.startswith(\"n\\u00ba\") or low == \"n\":\n            result[\"N\u00ba\"] = value\n        elif \"data\" == low:\n            result[\"Data\"] = value\n        elif \"nome\" in low:\n            result[\"Nome\"] = value\n        elif \"tipologia\" in low:\n            result[\"Tipologia\"] = value\n        elif \"capacidade\" in low or \"capacity\" in low:\n            result[\"Capacidade\"] = value\n        elif \"local\" in low:\n            result[\"Localiza\u00e7\u00e3o\"] = value\n        elif \"certifica\" in low:\n            result[\"Certifica\u00e7\u00f5es\"] = value\n    for key in [\"N\u00ba\", \"Data\", \"Nome\", \"Tipologia\", \"Capacidade\", \"Localiza\u00e7\u00e3o\", \"Certifica\u00e7\u00f5es\"]:\n        result.setdefault(key, \"\")\n    return result\n\n\ndef extract_detail(soup):\n    text = soup_text(soup)\n\n    def after(labels):\n        pattern = r\"(?:\" + \"|\".join(re.escape(x) for x in labels) + r\")\\s*[:\\-]?\\s*([^\\n]+)\"\n        match = re.search(pattern, text, re.I)\n        return clean(match.group(1)) if match else \"\"\n\n    heading = soup.find([\"h1\", \"h2\"])\n    heading_text = clean(heading.get_text(\" \", strip=True)) if heading else \"\"\n    return {\n        \"RNET n\u00ba\": after([\"RNET n\u00ba\", \"RNET n.\u00ba\", \"RNET\"]),\n        \"Data de Registo\": after([\"Registado em\", \"Data de Registo\"]),\n        \"Tipologia Completa\": after([\"Tipologia Completa\", \"Tipologia\"]),\n        \"Morada e C\u00f3digo Postal\": after([\"Morada\", \"Endere\u00e7o\", \"Morada e C\u00f3digo Postal\"]),\n        \"Contactos\": after([\"Contactos\", \"Contactos:\"]),\n        \"Marca Comercial\": after([\"Marca Comercial\", \"Marca\"]),\n        \"Entidade Exploradora\": after([\"Entidade Exploradora\", \"Entidade exploradora\"]),\n        \"NIF / NIPC\": after([\"NIF\", \"NIPC\"]),\n        \"Detail Heading\": heading_text,\n    }\n\n\nasync def export_for_keyword(page, keyword, flags):\n    selectors = [\"text=Exportar detalhe registos\", \"a:has-text('Exportar detalhe registos')\", \"button:has-text('Exportar detalhe registos')\"]\n    for selector in selectors:\n        loc = page.locator(selector).first\n        try:\n            if await loc.is_visible(timeout=700):\n                async with page.expect_download(timeout=7000) as download_info:\n                    if not await safe_click(page, loc, selector, flags, page.url):\n                        return\n                download = await download_info.value\n                await download.save_as(f\"{keyword}.xlsx\")\n                log(f\"Saved export for keyword '{keyword}'\")\n                return\n        except Exception:\n            continue\n    flags.append({\"Type\": \"Missing field\", \"URL\": page.url, \"Message\": \"Exportar detalhe registos was not observed or did not download.\"})\n\n\nasync def inspect_detail(context, url, source_url, mask_reviews, flags):\n    page = await context.new_page()\n    try:\n        response = await page.goto(url, wait_until=\"domcontentloaded\", timeout=30000)\n        await dismiss_cookie_banner(page)\n        html = await page.content()\n        blocked, markers = detect_anti_bot_signals(response.status if response else 0, html)\n        if blocked:\n            flags.append({\"Type\": \"Blocked by bot protection\", \"URL\": url, \"Message\": \", \".join(markers) or str(response.status)})\n            return None\n        soup = BeautifulSoup(html, \"html.parser\")\n        data = extract_detail(soup)\n        if mask_reviews:\n            data = {k: mask_review_text(v) if \"review\" in k.lower() else v for k, v in data.items()}\n        data.update({\"product_id\": canonical_id(url), \"product_url\": url, \"source_listing_url\": source_url})\n        for field in [\"RNET n\u00ba\", \"Data de Registo\", \"Tipologia Completa\", \"Morada e C\u00f3digo Postal\", \"Contactos\", \"Marca Comercial\", \"Entidade Exploradora\", \"NIF / NIPC\"]:\n            if not data.get(field):\n                flags.append({\"Type\": \"Missing field\", \"URL\": url, \"Message\": field})\n        return data\n    except Exception as exc:\n        flags.append({\"Type\": \"Error\", \"URL\": url, \"Message\": str(exc)[:500]})\n        return None\n    finally:\n        await page.close()\n\n\nasync def crawl_listing(context, url, keyword, max_products, mask_reviews, records, flags):\n    page = await context.new_page()\n    try:\n        response = await page.goto(url, wait_until=\"domcontentloaded\", timeout=30000)\n        await dismiss_cookie_banner(page)\n        html = await page.content()\n        blocked, markers = detect_anti_bot_signals(response.status if response else 0, html)\n        if blocked:\n            flags.append({\"Type\": \"Blocked by bot protection\", \"URL\": url, \"Message\": \", \".join(markers) or str(response.status)})\n            return\n        if keyword:\n            try:\n                await page.locator(SEARCH_INPUT).fill(\"\")\n                await page.locator(SEARCH_INPUT).fill(keyword)\n                button = page.locator(SEARCH_BUTTON)\n                if not await safe_click(page, button, SEARCH_BUTTON, flags, page.url):\n                    return\n                try:\n                    await page.wait_for_selector(\"table\", timeout=15000)\n                except PlaywrightTimeoutError:\n                    await page.wait_for_timeout(3000)\n            except Exception as exc:\n                flags.append({\"Type\": \"Error\", \"URL\": page.url, \"Message\": f\"Search failed: {exc}\"})\n                return\n        await export_for_keyword(page, keyword or \"export\", flags)\n        while True:\n            await page.wait_for_timeout(500)\n            soup = BeautifulSoup(await page.content(), \"html.parser\")\n            rows = extract_table_rows(soup)\n            if not rows:\n                break\n            for raw in rows:\n                if max_products is not None and len(records) >= max_products:\n                    return\n                item = mapped_row(raw)\n                href = raw.get(\"__detail_href\", \"\")\n                if href:\n                    detail_url = str(page.url).split(\"#\")[0].rsplit(\"/\", 1)[0] + \"/\" + href.lstrip(\"/\") if not href.startswith(\"http\") else href\n                else:\n                    detail_url = page.url + \"#\" + hashlib.sha1(item.get(\"N\u00ba\", item.get(\"Nome\", \"\")).encode()).hexdigest()[:12]\n                    flags.append({\"Type\": \"Low-confidence extraction\", \"URL\": page.url, \"Message\": \"No verified detail href in result row.\"})\n                detail = await inspect_detail(context, detail_url, url, mask_reviews, flags) if href else {}\n                record = {**item, **(detail or {})}\n                record.update({\"product_id\": canonical_id(detail_url), \"product_url\": detail_url, \"source_listing_url\": url})\n                records.append(record)\n            next_loc = page.locator(\"a\", has_text=re.compile(r\"pr\u00f3ximo\", re.I)).first\n            try:\n                if not await next_loc.is_visible(timeout=700):\n                    break\n                classes = (await next_loc.get_attribute(\"class\") or \"\").lower()\n                if \"disabled\" in classes or await next_loc.get_attribute(\"aria-disabled\") == \"true\":\n                    break\n                old = await page.locator(\"body\").inner_text()\n                if not await safe_click(page, next_loc, \"a:has-text('pr\u00f3ximo')\", flags, page.url):\n                    break\n                await page.wait_for_function(\"old => document.body.innerText !== old\", arg=old, timeout=15000)\n            except Exception:\n                break\n    finally:\n        await page.close()\n\n\nasync def run(args):\n    input_df = read_inputs(args.input)\n    records = []\n    flags = []\n    async with async_playwright() as pw:\n        browser = await pw.chromium.launch(headless=args.headless, args=[\"--disable-blink-features=AutomationControlled\", \"--no-sandbox\"])\n        context = await browser.new_context(\n            user_agent=\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36\",\n            viewport={\"width\": 1920, \"height\": 1080},\n            accept_downloads=True,\n        )\n        await context.add_init_script(\"Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };\")\n        await context.add_init_script(\"Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };\")\n        for _, row in input_df.iterrows():\n            if args.max_products is not None and len(records) >= args.max_products:\n                break\n            keyword = value_from_row(row, \"keyword\")\n            listing_url = value_from_row(row, \"listing_url\") or TARGET_URL\n            detail_url = value_from_row(row, \"detail_url\")\n            if detail_url:\n                log(f\"Scraping direct detail URL: {detail_url}\")\n                detail = await inspect_detail(context, detail_url, \"DIRECT_INPUT\", args.mask_reviews, flags)\n                if detail:\n                    records.append(detail)\n            else:\n                log(f\"Crawling listing URL {listing_url} with keyword '{keyword}'\")\n                await crawl_listing(context, listing_url, keyword, args.max_products, args.mask_reviews, records, flags)\n        await browser.close()\n    log(f\"Crawl Funnel: {len(input_df)} categories, {len(records)} links discovered, {len(records)} processed, {len(records)} extracted.\")\n    return records, flags\n\n\nasync def diagnostic(args):\n    async with async_playwright() as pw:\n        browser = await pw.chromium.launch(headless=args.headless, args=[\"--no-sandbox\"])\n        page = await browser.new_page()\n        response = await page.goto(TARGET_URL, wait_until=\"domcontentloaded\", timeout=30000)\n        await dismiss_cookie_banner(page)\n        title = await page.title()\n        await page.screenshot(path=\"diagnostic_screenshot.png\", full_page=True)\n        status = response.status if response else 0\n        log(f\"No product records found: HTTP {status}, Title: '{title}', Screenshot: diagnostic_screenshot.png\")\n        await browser.close()\n\n\ndef write_output(path, records, flags):\n    columns = [\"product_id\", \"product_url\", \"source_listing_url\", \"N\u00ba\", \"Data\", \"Nome\", \"Tipologia\", \"Capacidade\", \"Localiza\u00e7\u00e3o\", \"Certifica\u00e7\u00f5es\", \"RNET n\u00ba\", \"Data de Registo\", \"Tipologia Completa\", \"Morada e C\u00f3digo Postal\", \"Contactos\", \"Marca Comercial\", \"Entidade Exploradora\", \"NIF / NIPC\", \"Detail Heading\"]\n    data = []\n    for record in records:\n        data.append({col: sanitize_cell_value(record.get(col, \"\")) for col in columns})\n    flag_rows = [{\"Type\": sanitize_cell_value(x.get(\"Type\")), \"URL\": sanitize_cell_value(x.get(\"URL\")), \"Message\": sanitize_cell_value(x.get(\"Message\"))} for x in flags]\n    with pd.ExcelWriter(path, engine=\"openpyxl\") as writer:\n        pd.DataFrame(data, columns=columns).to_excel(writer, sheet_name=\"Extracted Data\", index=False)\n        pd.DataFrame(flag_rows, columns=[\"Type\", \"URL\", \"Message\"]).to_excel(writer, sheet_name=\"Flags\", index=False)\n\n\ndef main():\n    parser = argparse.ArgumentParser()\n    parser.add_argument(\"--input\", default=\"input.xlsx\")\n    parser.add_argument(\"--output\", default=\"output.xlsx\")\n    parser.add_argument(\"--max-products\", type=int, default=None)\n    parser.add_argument(\"--headless\", action=\"store_true\", default=True)\n    parser.add_argument(\"--visible\", dest=\"headless\", action=\"store_false\")\n    parser.add_argument(\"--mask-reviews\", action=\"store_true\", default=True)\n    parser.add_argument(\"--no-mask-reviews\", dest=\"mask_reviews\", action=\"store_false\")\n    args = parser.parse_args()\n    try:\n        records, flags = asyncio.run(run(args))\n        if not records:\n            asyncio.run(diagnostic(args))\n            log(\"ERROR: Zero product records were extracted. Aborting.\")\n            sys.exit(1)\n        write_output(args.output, records, flags)\n        log(f\"Wrote {len(records)} records to {args.output}\")\n    except SystemExit:\n        raise\n    except Exception as exc:\n        log(f\"ERROR: {exc}\")\n        sys.exit(1)\n\n\nif __name__ == \"__main__\":\n    main()",
+  "requirements_txt": "pandas\nopenpyxl\nbeautifulsoup4\nplaywright",
+  "confidence_notes": [
+    "The inspection found no populated result rows, so table row structure, detail hrefs, plus-icon behavior, pagination state, export download behavior, and detail selectors remain unverified.",
+    "The script uses Playwright because the target is an ASP.NET WebForms page with postback state including __OSVSTATE; no API endpoint was observed.",
+    "Because detail links were not available during inspection, href resolution is deliberately conservative and records a low-confidence flag when a row has no verified detail href.",
+    "Detail fields are extracted using label-based text matching rather than site-specific selectors because no detail page was reached.",
+    "The requested Capacidade column was not present among the observed headers; the script captures it if it appears in a returned table.",
+    "Product IDs use one consistent deterministic SHA-256-derived identifier from each detail URL, rather than mixing uncertain SKU and URL strategies.",
+    "The export filename uses the keyword directly and may require sanitization for keywords containing filesystem-reserved characters; this was not specified in the findings.",
+    "No cookie banner or anti-bot challenge was observed during inspection; challenge detection and diagnostic handling are included as required.",
+    "Generated code had Python syntax error on line 147: invalid syntax"
+  ],
+  "total_tool_calls": 12,
+  "action_log": [
+    {
+      "ts": "2026-10-22T12:16:28",
+      "phase": "recon",
+      "tool": "browser_navigate",
+      "input": {
+        "url": "https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx?FiltroVisivel=True"
+      },
+      "call_number": 1
+    },
+    {
+      "ts": "2026-10-22T12:16:45",
+      "phase": "recon",
+      "tool": "browser_snapshot",
+      "input": {},
+      "call_number": 2
+    },
+    {
+      "ts": "2026-10-22T12:16:47",
+      "phase": "recon",
+      "tool": "browser_evaluate",
+      "input": {
+        "expression": "({text:document.body.innerText, inputs:[...document.querySelectorAll('input,button,select,a')].map(e=>({tag:e.tagName,type:e.type,id:e.id,name:e.name,text:(e.innerText||e.value||'').trim(),href:e.href||''})).slice(0,80)})"
+      },
+      "call_number": 3
+    },
+    {
+      "ts": "2026-10-22T12:16:49",
+      "phase": "recon",
+      "tool": "browser_network_requests",
+      "input": {},
+      "call_number": 4
+    },
+    {
+      "ts": "2026-10-22T12:16:49",
+      "phase": "recon",
+      "tool": "browser_type",
+      "input": {
+        "selector": "#RichWidgets_wt104_block_wtMainContent_wt170",
+        "text": "Hotel"
+      },
+      "call_number": 5
+    },
+    {
+      "ts": "2026-10-22T12:16:50",
+      "phase": "recon",
+      "tool": "browser_take_screenshot",
+      "input": {},
+      "call_number": 6
+    },
+    {
+      "ts": "2026-10-22T12:16:51",
+      "phase": "recon",
+      "tool": "browser_click",
+      "input": {
+        "selector": "#RichWidgets_wt104_block_wtMainContent_wt201"
+      },
+      "call_number": 7
+    },
+    {
+      "ts": "2026-10-22T12:16:54",
+      "phase": "recon",
+      "tool": "browser_snapshot",
+      "input": {},
+      "call_number": 8
+    },
+    {
+      "ts": "2026-10-22T12:16:57",
+      "phase": "recon",
+      "tool": "browser_evaluate",
+      "input": {
+        "expression": "({text:document.body.innerText.slice(0,12000), links:[...document.querySelectorAll('a')].map(a=>({text:a.innerText.trim(),href:a.href,id:a.id})).filter(x=>x.text||x.href.includes('Detalhe')).slice(0,100), tables:[...document.querySelectorAll('table')].map(t=>t.innerText.slice(0,2000))})"
+      },
+      "call_number": 9
+    },
+    {
+      "ts": "2026-10-22T12:16:59",
+      "phase": "recon",
+      "tool": "browser_click",
+      "input": {
+        "selector": "#RichWidgets_wt104_block_wtMainContent_wt22"
+      },
+      "call_number": 10
+    },
+    {
+      "ts": "2026-10-22T12:17:02",
+      "phase": "recon",
+      "tool": "browser_click",
+      "input": {
+        "selector": "#RichWidgets_wt104_block_wtMainContent_wt201"
+      },
+      "call_number": 11
+    },
+    {
+      "ts": "2026-10-22T12:17:05",
+      "phase": "recon",
+      "tool": "browser_snapshot",
+      "input": {},
+      "call_number": 12
+    }
+  ]
+}
+
+CURRENT BROKEN CODE:
+```python
+import argparse
+import asyncio
+import hashlib
+import json
+import re
+import sys
+from datetime import datetime
+
+import pandas as pd
+from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+
+TARGET_URL = "https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx?FiltroVisivel=True"
+SEARCH_INPUT = "#RichWidgets_wt104_block_wtMainContent_wt170"
+SEARCH_BUTTON = "#RichWidgets_wt104_block_wtMainContent_wt201"
+CLEAR_BUTTON = "#RichWidgets_wt104_block_wtMainContent_wt22"
+
+
+def log(message):
+    print(f"[{datetime.now().isoformat(timespec='seconds')}] {message}", flush=True)
+
+
+def sanitize_cell_value(val, max_len=32000):
+    if val is None:
+        return ""
+    if isinstance(val, (dict, list)):
+        s = json.dumps(val, ensure_ascii=False)
+    else:
+        s = str(val)
+    if len(s) > max_len:
+        return s[:max_len - 35] + "... [TRUNCATED_EXCEL_LIMIT]"
+    return s
+
+
+def clean(value):
+    if value is None or pd.isna(value) or str(value).strip().lower() in ("", "nan", "none", "null"):
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    value = str(value).strip()
+    if value.lower() in {"nan", "none", "null"}:
+        return ""
+    return value
+
+
+def value_from_row(row, name):
+    if name not in row:
+        return ""
+    return clean(row[name])
+
+
+def mask_review_text(text):
+    text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "***@***.***", text)
+
+    def mask_name(match):
+        parts = match.group(0).split()
+        return " ".join((p[0] + "***" if p else p) for p in parts[:-1]) + (" " if len(parts) > 1 else "") + (parts[-1][0] + "." if parts else "")
+
+    return re.sub(r"\b[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][a-záàãâéêíóôõúç]+\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][a-záàãâêíóôõúç]+\b", mask_name, text)
+
+
+def canonical_id(url):
+    return "url-" + hashlib.sha256(url.encode("utf-8")).hexdigest()[:20]
+
+
+def safe_title(soup):
+    return ((soup.title.get_text(strip=True) if getattr(soup, "title", None) else "") if getattr(soup, "title", None) else "") if getattr(soup, "title", None) else ""
+
+
+def soup_text(soup):
+    return soup.get_text("\n", strip=True).replace("\xa0", " ")
+
+
+def read_inputs(path):
+    try:
+        input_df = pd.read_excel(path).fillna("")
+    except Exception as exc:
+        log(f"Unable to read input workbook: {exc}")
+        raise
+    known = {"keyword", "listing_url", "detail_url"}
+    normalized = {str(c).strip().lower() for c in input_df.columns}
+    if not normalized.intersection(known):
+        raw = pd.read_excel(path, header=None).fillna("")
+        input_df = pd.DataFrame({"keyword": raw.iloc[:, 0] if not raw.empty else []}).fillna("")
+    else:
+        rename = {c: str(c).strip().lower() for c in input_df.columns}
+        input_df = input_df.rename(columns=rename)
+    for col in known:
+        if col not in input_df.columns:
+            input_df[col] = ""
+    return input_df.fillna("")
+
+
+def detect_anti_bot_signals(status, html):
+    markers = (
+        "cloudflare turnstile", "cf-browser-verification", "ray id:", "just a moment...",
+        "datadome", "perimeterx", "px-captcha", "distil networks", "press & hold",
+        "incapsula", "_incapsula_resource", "imperva", "incident id", "kasada",
+        "akamai", "shieldsquare", "security challenge", "pardon our interruption",
+        "potential security risk", "detected automated scripts", "additional security check",
+        "i am human", "hcaptcha", "access denied", "robot or human"
+    )
+    text = (html or "").lower()
+    found = [marker for marker in markers if marker in text]
+    return status in {403, 429} or bool(found), found
+
+
+async def dismiss_cookie_banner(page):
+    for selector in [
+        "button:has-text('Accept')", "button:has-text('Aceitar')",
+        "button:has-text('Concordo')", "[id*='cookie' i] button",
+        "[class*='cookie' i] button"
+    ]:
+        try:
+            loc = page.locator(selector).first
+            if await loc.is_visible(timeout=800):
+                await loc.click(timeout=1500)
+                return
+        except Exception:
+            continue
+
+
+async def safe_click(page, locator, selector, flags, url):
+    try:
+        await locator.click(timeout=5000)
+        return True
+    except Exception as exc:
+        log(f"Click blocked on locator '{selector}': {exc}")
+        flags.append({"Type": "Click Intercepted", "URL": url, "Message": f"Element {selector} blocked: {str(exc)[:200]}"})
+        try:
+            await page.keyboard.press("Escape")
+            await locator.click(timeout=2000)
+            return True
+        except Exception:
+            try:
+                await locator.evaluate("el => el.click()")
+                return True
+            except Exception:
+                return False
+
+
+async def page_snapshot(page):
+    html = await page.content()
+    status = page.request? if False else None
+    return html, status
+
+
+def extract_table_rows(soup):
+    table = None
+    for candidate in soup.find_all("table"):
+        headers = [clean(x.get_text(" ", strip=True)).lower() for x in candidate.find_all("th")]
+        if any("nome" in h for h in headers) and any("local" in h for h in headers):
+            table = candidate
+            break
+    if table is None:
+        return []
+    headers = [clean(x.get_text(" ", strip=True)) for x in table.find_all("th")]
+    rows = []
+    for tr in table.find_all("tr"):
+        cells = tr.find_all(["td", "th"])
+        if not cells or cells[0].name == "th":
+            continue
+        values = [clean(c.get_text(" ", strip=True)) for c in cells]
+        row = {headers[i] if i < len(headers) else f"column_{i + 1}": values[i] for i in range(len(values))}
+        detail = tr.find("a", href=True)
+        if detail:
+            row["__detail_href"] = detail.get("href", "")
+        row["__detail_anchor"] = str(tr)
+        rows.append(row)
+    return rows
+
+
+def mapped_row(row):
+    result = {}
+    for key, value in row.items():
+        if key.startswith("__"):
+            continue
+        low = key.lower()
+        if low.startswith("nº") or low.startswith("n\u00ba") or low == "n":
+            result["Nº"] = value
+        elif "data" == low:
+            result["Data"] = value
+        elif "nome" in low:
+            result["Nome"] = value
+        elif "tipologia" in low:
+            result["Tipologia"] = value
+        elif "capacidade" in low or "capacity" in low:
+            result["Capacidade"] = value
+        elif "local" in low:
+            result["Localização"] = value
+        elif "certifica" in low:
+            result["Certificações"] = value
+    for key in ["Nº", "Data", "Nome", "Tipologia", "Capacidade", "Localização", "Certificações"]:
+        result.setdefault(key, "")
+    return result
+
+
+def extract_detail(soup):
+    text = soup_text(soup)
+
+    def after(labels):
+        pattern = r"(?:" + "|".join(re.escape(x) for x in labels) + r")\s*[:\-]?\s*([^\n]+)"
+        match = re.search(pattern, text, re.I)
+        return clean(match.group(1)) if match else ""
+
+    heading = soup.find(["h1", "h2"])
+    heading_text = clean(heading.get_text(" ", strip=True)) if heading else ""
+    return {
+        "RNET nº": after(["RNET nº", "RNET n.º", "RNET"]),
+        "Data de Registo": after(["Registado em", "Data de Registo"]),
+        "Tipologia Completa": after(["Tipologia Completa", "Tipologia"]),
+        "Morada e Código Postal": after(["Morada", "Endereço", "Morada e Código Postal"]),
+        "Contactos": after(["Contactos", "Contactos:"]),
+        "Marca Comercial": after(["Marca Comercial", "Marca"]),
+        "Entidade Exploradora": after(["Entidade Exploradora", "Entidade exploradora"]),
+        "NIF / NIPC": after(["NIF", "NIPC"]),
+        "Detail Heading": heading_text,
+    }
+
+
+async def export_for_keyword(page, keyword, flags):
+    selectors = ["text=Exportar detalhe registos", "a:has-text('Exportar detalhe registos')", "button:has-text('Exportar detalhe registos')"]
+    for selector in selectors:
+        loc = page.locator(selector).first
+        try:
+            if await loc.is_visible(timeout=700):
+                async with page.expect_download(timeout=7000) as download_info:
+                    if not await safe_click(page, loc, selector, flags, page.url):
+                        return
+                download = await download_info.value
+                await download.save_as(f"{keyword}.xlsx")
+                log(f"Saved export for keyword '{keyword}'")
+                return
+        except Exception:
+            continue
+    flags.append({"Type": "Missing field", "URL": page.url, "Message": "Exportar detalhe registos was not observed or did not download."})
+
+
+async def inspect_detail(context, url, source_url, mask_reviews, flags):
+    page = await context.new_page()
+    try:
+        response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await dismiss_cookie_banner(page)
+        html = await page.content()
+        blocked, markers = detect_anti_bot_signals(response.status if response else 0, html)
+        if blocked:
+            flags.append({"Type": "Blocked by bot protection", "URL": url, "Message": ", ".join(markers) or str(response.status)})
+            return None
+        soup = BeautifulSoup(html, "html.parser")
+        data = extract_detail(soup)
+        if mask_reviews:
+            data = {k: mask_review_text(v) if "review" in k.lower() else v for k, v in data.items()}
+        data.update({"product_id": canonical_id(url), "product_url": url, "source_listing_url": source_url})
+        for field in ["RNET nº", "Data de Registo", "Tipologia Completa", "Morada e Código Postal", "Contactos", "Marca Comercial", "Entidade Exploradora", "NIF / NIPC"]:
+            if not data.get(field):
+                flags.append({"Type": "Missing field", "URL": url, "Message": field})
+        return data
+    except Exception as exc:
+        flags.append({"Type": "Error", "URL": url, "Message": str(exc)[:500]})
+        return None
+    finally:
+        await page.close()
+
+
+async def crawl_listing(context, url, keyword, max_products, mask_reviews, records, flags):
+    page = await context.new_page()
+    try:
+        response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await dismiss_cookie_banner(page)
+        html = await page.content()
+        blocked, markers = detect_anti_bot_signals(response.status if response else 0, html)
+        if blocked:
+            flags.append({"Type": "Blocked by bot protection", "URL": url, "Message": ", ".join(markers) or str(response.status)})
+            return
+        if keyword:
+            try:
+                await page.locator(SEARCH_INPUT).fill("")
+                await page.locator(SEARCH_INPUT).fill(keyword)
+                button = page.locator(SEARCH_BUTTON)
+                if not await safe_click(page, button, SEARCH_BUTTON, flags, page.url):
+                    return
+                try:
+                    await page.wait_for_selector("table", timeout=15000)
+                except PlaywrightTimeoutError:
+                    await page.wait_for_timeout(3000)
+            except Exception as exc:
+                flags.append({"Type": "Error", "URL": page.url, "Message": f"Search failed: {exc}"})
+                return
+        await export_for_keyword(page, keyword or "export", flags)
+        while True:
+            await page.wait_for_timeout(500)
+            soup = BeautifulSoup(await page.content(), "html.parser")
+            rows = extract_table_rows(soup)
+            if not rows:
+                break
+            for raw in rows:
+                if max_products is not None and len(records) >= max_products:
+                    return
+                item = mapped_row(raw)
+                href = raw.get("__detail_href", "")
+                if href:
+                    detail_url = str(page.url).split("#")[0].rsplit("/", 1)[0] + "/" + href.lstrip("/") if not href.startswith("http") else href
+                else:
+                    detail_url = page.url + "#" + hashlib.sha1(item.get("Nº", item.get("Nome", "")).encode()).hexdigest()[:12]
+                    flags.append({"Type": "Low-confidence extraction", "URL": page.url, "Message": "No verified detail href in result row."})
+                detail = await inspect_detail(context, detail_url, url, mask_reviews, flags) if href else {}
+                record = {**item, **(detail or {})}
+                record.update({"product_id": canonical_id(detail_url), "product_url": detail_url, "source_listing_url": url})
+                records.append(record)
+            next_loc = page.locator("a", has_text=re.compile(r"próximo", re.I)).first
+            try:
+                if not await next_loc.is_visible(timeout=700):
+                    break
+                classes = (await next_loc.get_attribute("class") or "").lower()
+                if "disabled" in classes or await next_loc.get_attribute("aria-disabled") == "true":
+                    break
+                old = await page.locator("body").inner_text()
+                if not await safe_click(page, next_loc, "a:has-text('próximo')", flags, page.url):
+                    break
+                await page.wait_for_function("old => document.body.innerText !== old", arg=old, timeout=15000)
+            except Exception:
+                break
+    finally:
+        await page.close()
+
+
+async def run(args):
+    input_df = read_inputs(args.input)
+    records = []
+    flags = []
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=args.headless, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"])
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+            viewport={"width": 1920, "height": 1080},
+            accept_downloads=True,
+        )
+        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
+        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
+        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
+        for _, row in input_df.iterrows():
+            if args.max_products is not None and len(records) >= args.max_products:
+                break
+            keyword = value_from_row(row, "keyword")
+            listing_url = value_from_row(row, "listing_url") or TARGET_URL
+            detail_url = value_from_row(row, "detail_url")
+            if detail_url:
+                log(f"Scraping direct detail URL: {detail_url}")
+                detail = await inspect_detail(context, detail_url, "DIRECT_INPUT", args.mask_reviews, flags)
+                if detail:
+                    records.append(detail)
+            else:
+                log(f"Crawling listing URL {listing_url} with keyword '{keyword}'")
+                await crawl_listing(context, listing_url, keyword, args.max_products, args.mask_reviews, records, flags)
+        await browser.close()
+    log(f"Crawl Funnel: {len(input_df)} categories, {len(records)} links discovered, {len(records)} processed, {len(records)} extracted.")
+    return records, flags
+
+
+async def diagnostic(args):
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=args.headless, args=["--no-sandbox"])
+        page = await browser.new_page()
+        response = await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=30000)
+        await dismiss_cookie_banner(page)
+        title = await page.title()
+        await page.screenshot(path="diagnostic_screenshot.png", full_page=True)
+        status = response.status if response else 0
+        log(f"No product records found: HTTP {status}, Title: '{title}', Screenshot: diagnostic_screenshot.png")
+        await browser.close()
+
+
+def write_output(path, records, flags):
+    columns = ["product_id", "product_url", "source_listing_url", "Nº", "Data", "Nome", "Tipologia", "Capacidade", "Localização", "Certificações", "RNET nº", "Data de Registo", "Tipologia Completa", "Morada e Código Postal", "Contactos", "Marca Comercial", "Entidade Exploradora", "NIF / NIPC", "Detail Heading"]
+    data = []
+    for record in records:
+        data.append({col: sanitize_cell_value(record.get(col, "")) for col in columns})
+    flag_rows = [{"Type": sanitize_cell_value(x.get("Type")), "URL": sanitize_cell_value(x.get("URL")), "Message": sanitize_cell_value(x.get("Message"))} for x in flags]
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        pd.DataFrame(data, columns=columns).to_excel(writer, sheet_name="Extracted Data", index=False)
+        pd.DataFrame(flag_rows, columns=["Type", "URL", "Message"]).to_excel(writer, sheet_name="Flags", index=False)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", default="input.xlsx")
+    parser.add_argument("--output", default="output.xlsx")
+    parser.add_argument("--max-products", type=int, default=None)
+    parser.add_argument("--headless", action="store_true", default=True)
+    parser.add_argument("--visible", dest="headless", action="store_false")
+    parser.add_argument("--mask-reviews", action="store_true", default=True)
+    parser.add_argument("--no-mask-reviews", dest="mask_reviews", action="store_false")
+    args = parser.parse_args()
+    try:
+        records, flags = asyncio.run(run(args))
+        if not records:
+            asyncio.run(diagnostic(args))
+            log("ERROR: Zero product records were extracted. Aborting.")
+            sys.exit(1)
+        write_output(args.output, records, flags)
+        log(f"Wrote {len(records)} records to {args.output}")
+    except SystemExit:
+        raise
+    except Exception as exc:
+        log(f"ERROR: {exc}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+INSTRUCTIONS FOR REPAIR:
+1. Incorporate the verified working selectors and findings discovered during the live diagnostic inspection session.
+2. If dynamic JavaScript elements, prices, or specs were missing, or if click interactions failed, use Playwright async browser automation (`playwright.async_api.async_playwright()`) with `page.wait_for_selector()`, selector auto-waiting, and auto-dismiss cookie banners.
+3. If 0 rows were extracted due to overly restrictive keyword/category filtering, relax the matching logic or match against URL slugs.
+4. Ensure the script follows the mandatory SCRIPT CONTRACT strictly.
+5. Return your final answer as a single JSON object with keys "generated_code", "requirements_txt", and "confidence_notes".
+
+MANDATORY SCRIPT CONTRACT - every scraper you write MUST follow this exact
+shape, regardless of the target site. This is not optional or per-job -
+every script this service produces must be a drop-in replacement for any
+other, so a person running it never has to read the code first to figure
+out how to call it:
+
+  - Command-line args via argparse:
+      `--input` (default "input.xlsx"),
+      `--output` (default "output.xlsx"),
+      `--max-products` (optional int cap),
+      `--headless` (default True, flag to run browser headless or visible),
+      `--mask-reviews` (default True, flag to mask reviewer PII and skip review accordions).
+
+  - Input Excel columns (any subset may be populated - handle all three):
+      `keyword`, `listing_url`, `detail_url` - semantics:
+      * `keyword`: triggers a search/match flow against the listing page or direct URL.
+      * `listing_url`: crawls a specific listing page (or falls back to default TARGET_URL).
+      * `detail_url`: scrapes one item page directly, skipping listing discovery.
+      * IMPORTANT: `detail_url` must be a genuinely independent fast path that extracts
+        the single page directly without requiring a listing crawl first.
+
+  - CANONICAL PRODUCT IDENTIFIERS & PROVENANCE URLS (MANDATORY SCHEMA):
+      Every extracted record MUST contain these three standardized columns:
+      1. `product_id`: Single deterministic primary key.
+         * Resolution hierarchy:
+           - Priority 1: Official SKU, model code, or MPN (e.g. from JSON-LD `sku`/`productID` or page metadata).
+           - Priority 2: Canonical URL slug / product ID extracted from the product URL via a consistent regex pattern.
+           - STRICT: Use the exact same ID strategy across all rows in the dataset; NEVER arbitrarily mix SKU for one product and URL slug for another.
+      2. `product_url`: Direct canonical URL of the product detail page.
+      3. `source_listing_url`: The category or listing URL from which the item was discovered (or "DIRECT_INPUT" if passed directly via input.xlsx detail_url).
+      * NOTE: Do NOT output a duplicate "Source URL" column that mirrors "product_url".
+
+  - STRICT ELEMENT-SCOPED PRICE EXTRACTION & NUMBER ISOLATION (CRITICAL):
+      * Prices MUST be extracted EXCLUSIVELY from within the product's primary pricing container
+        or buy box (e.g. `[itemprop="price"]`, `.price`, `.product-price`, `.current-price`, or JSON-LD `offers.price`).
+      * NEVER execute price regexes or digit extractors against product headings (`h1`, `h2`, `h3`, `.title`, `.product-name`),
+        description paragraphs, promo banners, or recommendation carousels (`.carousel`, `.recommendations`, `.related-products`).
+      * Title Digits Trap: Numbers in product titles (e.g., "250 North American Birds Sound Book") are NOT prices!
+      * Currency Anchoring: For text extraction, anchor to currency symbols or ISO codes:
+        e.g., `r'(?i)(?:[\$£€₹]|USD|CAD|EUR|GBP)\s*(\d{1,5}(?:[.,]\d{2})?)'`
+        Reject raw standalone numbers without currency indicators found in prose or headings.
+
+  - CRAWL FUNNEL TELEMETRY & LOUD FAILURE ON EMPTY:
+      * Scrapers must track and log crawl funnel metrics using `log()`:
+        `categories_discovered`, `links_discovered`, `links_processed`, `records_extracted`.
+        Example: `log(f"Crawl Funnel: {num_categories} categories, {num_links} links discovered, {num_processed} processed, {num_extracted} extracted.")`
+      * FAIL LOUDLY: If the crawl completes with 0 records extracted, the script MUST log:
+        `ERROR: Zero product records were extracted. Aborting.` and exit with `sys.exit(1)`.
+      * DIAGNOSTIC SCREENSHOT ON ZERO RECORDS: If 0 product records are found on the target listing/detail page,
+        take a full-page screenshot using Playwright saved to `diagnostic_screenshot.png`, capture the HTTP status code
+        and page `<title>`, and log: `log(f"No product records found: HTTP {status}, Title: '{title}', Screenshot: diagnostic_screenshot.png")`.
+
+  - EXCEL CELL LENGTH LIMIT PROTECTION (32,767 CHARACTERS):
+      * Excel cells corrupt or truncate if text exceeds 32,767 characters.
+      * Every script MUST define and use a `sanitize_cell_value(val, max_len=32000)` helper:
+        ```python
+        def sanitize_cell_value(val, max_len=32000):
+            if val is None:
+                return ""
+            if isinstance(val, (dict, list)):
+                s = json.dumps(val, ensure_ascii=False)
+            else:
+                s = str(val)
+            if len(s) > max_len:
+                return s[:max_len - 35] + "... [TRUNCATED_EXCEL_LIMIT]"
+            return s
+        ```
+      * Pass all field values through `sanitize_cell_value()` before exporting to DataFrame / Excel.
+
+  - CLICK INTERCEPTION & MODAL OVERLAY ERROR LOGGING:
+      * When clicks are blocked or intercepted by overlays/popups, catch the exception, log the real error:
+        `log(f"Click blocked on locator '{selector}': {exc}")`
+      * Record in Flags sheet: `{"Type": "Click Intercepted", "URL": url, "Message": f"Element {selector} blocked: {str(exc)[:200]}"}`
+      * Fallbacks: try pressing Escape (`await page.keyboard.press("Escape")`), dismiss modal overlays,
+        or dispatch JS click (`await locator.evaluate("el => el.click()")`).
+
+  - BOT PROTECTION FAST-FAIL (NO FUTILE RETRIES):
+      * In `detect_anti_bot_signals()`: If HTTP status is 403, 429, or page contains WAF challenge markers:
+        Always inspect both HTTP status and HTML text (lowercase). Include all enterprise and state WAF signatures:
+        markers = (
+            "cloudflare turnstile", "cf-browser-verification", "ray id:", "just a moment...",
+            "datadome", "perimeterx", "px-captcha", "distil networks", "press & hold",
+            "incapsula", "_incapsula_resource", "imperva", "incident id", "kasada",
+            "akamai", "shieldsquare", "security challenge", "pardon our interruption",
+            "potential security risk", "detected automated scripts", "additional security check",
+            "i am human", "hcaptcha", "access denied", "robot or human"
+        )
+        Classify as "Blocked by bot protection", log to Flags, and STOP RETRYING immediately. Exit cleanly with anti-bot status.
+
+  - SAFE PAGE TITLE & BEAUTIFULSOUP PARSING:
+      * Never call `.title.get_text()` without guarding against None:
+        `safe_title = soup.title.get_text(strip=True) if getattr(soup, "title", None) else ""`
+
+
+  - PERSONAL DATA & REVIEW ACCORDION FILTERING:
+      * When expanding accordions to discover specs, DO NOT click review accordions:
+        Skip any selector matching `[class*='review' i]`, `[id*='review' i]`, `button:has-text('Review')`, `button:has-text('Rating')`.
+      * If `--mask-reviews` is True (default) and review text is extracted:
+        Apply regex masking to reviewer names (`John Doe` -> `J*** D.`) and email addresses (`***@***.***`).
+
+  - OUTPUT EXCEL SHEETS (EXTENSIBLE CONTRACT):
+      * Must contain at least two sheets:
+        1. "Extracted Data": One row per item.
+        2. "Flags": One row per anti-bot signal, missing field, low-confidence extraction, or error.
+           Include entries if core fields (e.g. brand, category, price) are missing on a product.
+      * MULTI-SHEET EXTENSIBILITY: Scrapers may also write additional custom sheets if requested
+        (e.g., "Recommendations", "Variants", "Categories"). Repair agents and scripts MUST PRESERVE all custom sheets.
+
+  - CASCADE EXTRACTION STRATEGY:
+      1. Tier 1 (Internal JSON API): If observed during recon, query endpoint directly using requests/httpx.
+      2. Tier 2 (Hydrated State): Check for `<script id="__NEXT_DATA__">`, `<script id="__NUXT_DATA__">`,
+         `window.__INITIAL_STATE__`, or Schema.org JSON-LD blocks.
+      3. Tier 3 (Playwright Async Browser Automation): For modern JavaScript SPAs, client-rendered prices,
+         accordion spec tables, dynamic color/storage variants, and ASP.NET WebForms:
+         * Use `playwright.async_api.async_playwright()`.
+         * Launch Chromium with `--disable-blink-features=AutomationControlled`, `--no-sandbox`, and realistic User-Agent.
+         * Set viewport and inject stealth script immediately after creating context:
+           ```python
+           context = await browser.new_context(
+               user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+               viewport={"width": 1920, "height": 1080},
+           )
+           await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
+           ```
+         * Call `dismiss_cookie_banner(page)` immediately after `page.goto()`.
+         * Auto-wait for elements using `page.wait_for_selector()` or `page.locator()`.
+         * For ASP.NET / form submits that trigger navigation, wrap submits:
+           `async with page.expect_navigation(wait_until="domcontentloaded"): await submit_btn.click()`
+           or wait for the results grid directly after clicking.
+         * Click accordion tabs to reveal hidden specs (skipping review accordions).
+      4. Tier 4 (Static Fast-Path): For traditional server-rendered static HTML sites, use `requests`
+         with a desktop User-Agent and `BeautifulSoup`.
+
+  - Cookie & Consent Banner Dismissal:
+      Include a `dismiss_cookie_banner(page)` helper and call it once immediately after every `page.goto(...)`.
+
+  - Data Cleaning & Normalization:
+      * Clean currency/prices: extract clean formatted strings (e.g. "$24.99", "USD 120.00").
+      * Print timestamped log lines for each major step using a `log()` helper.
+
+  - REGEX & CODE SYNTAX RULES (CRITICAL):
+      * In raw strings (r"..." or r'...'), use SINGLE backslashes for regex tokens:
+        r"\d+", r"\s+", r"\b", r"\w+", r"\(?[2-9]\d{2}\)?", r"\.com".
+        NEVER double-escape inside raw strings (do NOT write r"\\d", r"\\s", r"\\b", r"\\(").
+      * When escaping literal parentheses in regex, use r"\(" and r"\)" (or re.escape).
+      * For HTML string cleaning with BeautifulSoup, use "\n" as separator and "\xa0" for non-breaking spaces.
+      * The script must be syntactically valid Python 3 and compile with zero errors.
+
+  - INPUT EXCEL & NAN HANDLING RULES (CRITICAL):
+      * When reading a single sheet from Excel with pandas:
+        `input_df = pd.read_excel(args.input).fillna("")`
+      * If reading multiple sheets with `sheet_name=None`, pandas returns a dict of DataFrames.
+        Apply `.fillna("")` to each DataFrame inside the dict:
+        `sheets = pd.read_excel(args.input, sheet_name=None)`
+        `sheets = {k: v.fillna("") for k, v in sheets.items()}`
+        `input_df = sheets.get("Extracted Data") or next(iter(sheets.values()), pd.DataFrame())`
+        NEVER call `.fillna("")` directly on the dict returned by `pd.read_excel(..., sheet_name=None)`!
+      * Any helper function (e.g. `clean()`, `value_from_row()`) MUST treat `pd.isna(val)`, `None`,
+        and the string `"nan"` / `"none"` / `"null"` as empty string `""`.
+      * NEVER allow `"nan"` to be treated as a valid `detail_url`, `listing_url`, or `keyword`.

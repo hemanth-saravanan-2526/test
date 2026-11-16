@@ -1,0 +1,6 @@
+{
+  "status": "failed",
+  "returncode": 1,
+  "extracted_rows": 0,
+  "error_summary": "ripts\\test_3_be862f3a\\generated_scraper.py\", line 199, in wait_results\r\n    await page.wait_for_function(\"([sel, old]) => document.querySelector(sel)?.innerText !== old\", [LISTING_TABLE, old_signature], timeout=30000)\r\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\nTypeError: Page.wait_for_function() takes 2 positional arguments but 3 positional arguments (and 1 keyword-only argument) were given\r\n"
+}

@@ -1,0 +1,12 @@
+{
+  "confidence_notes": [
+    "The inspection reported no observed API and a traditional server-rendered Books to Scrape page, so the scraper uses requests and BeautifulSoup as the primary path; Playwright is included only for the mandatory zero-record diagnostic screenshot.",
+    "The inspection observed 11 category items and no next link. The script still follows next links if present.",
+    "All observed listing items were in stock, but the script excludes any item whose detail availability does not contain 'In stock'.",
+    "Product IDs are taken from the official UPC field when present, as required by the requested extraction. A URL-slug fallback is used if a source page lacks UPC; such a fallback is flagged as low confidence because the site normally supplies UPC values.",
+    "No reviewer content or review accordions were extracted. The PII masker is retained for any description text that might contain matching personal-data patterns.",
+    "The exact input workbook shape beyond the three documented columns was not observed; rows are processed independently, with missing or null-like values treated as empty strings."
+  ],
+  "anti_bot_marker": null,
+  "total_tool_calls": 8
+}

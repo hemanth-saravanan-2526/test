@@ -1,0 +1,443 @@
+--- attempt_1.py
++++ attempt_2.py
+@@ -18,7 +18,7 @@
+ BASE_URL = "https://corp.sec.state.ma.us/"
+ GRID_SELECTOR = "#MainContent_SearchControl_grdSearchResultsEntity"
+ ROW_SELECTOR = GRID_SELECTOR + " tr.GridRow, " + GRID_SELECTOR + " tr.GridAltRow"
+-DETAIL_LINK_SELECTOR = GRID_SELECTOR + " a.link[href*='CorpSummary.aspx']"
++DETAIL_LINK_SELECTOR = GRID_SELECTOR + " a[href*='CorpSummary.aspx']"
+ 
+ 
+ def log(message):
+@@ -46,7 +46,9 @@
+     except (TypeError, ValueError):
+         pass
+     text = str(value).replace("\xa0", " ").strip()
+-    return "" if text.lower() in {"", "nan", "none", "null"} else re.sub(r"\s+", " ", text)
++    if text.lower() in {"", "nan", "none", "null"}:
++        return ""
++    return re.sub(r"\s+", " ", text)
+ 
+ 
+ def value_from_row(row, key):
+@@ -62,17 +64,17 @@
+ 
+ 
+ def detect_anti_bot_signals(status, html):
++    markers = (
++        "cloudflare turnstile", "cf-browser-verification", "ray id:",
++        "just a moment...", "datadome", "perimeterx", "px-captcha",
++        "distil networks", "press & hold", "incapsula", "_incapsula_resource",
++        "imperva", "incident id", "kasada", "akamai", "shieldsquare",
++        "security challenge", "pardon our interruption", "potential security risk",
++        "detected automated scripts", "additional security check", "i am human",
++        "hcaptcha", "access denied", "robot or human"
++    )
+     text = (html or "").lower()
+-    markers = (
+-        "cloudflare turnstile",
+-        "just a moment...",
+-        "datadome",
+-        "perimeterx",
+-        "verify you are human",
+-    )
+-    if status in {403, 429} or any(marker in text for marker in markers):
+-        return "Blocked by bot protection"
+-    return ""
++    return "Blocked by bot protection" if status in {403, 429} or any(x in text for x in markers) else ""
+ 
+ 
+ def mask_reviewer_pii(text):
+@@ -86,22 +88,18 @@
+     return re.sub(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b", mask_name, text)
+ 
+ 
+-def table_field(soup, selector, labels):
+-    table = soup.select_one(selector)
+-    if not table:
+-        return ""
+-    wanted = {clean(label).lower().rstrip(":") for label in labels}
+-    for row in table.select("tr"):
+-        cells = [clean(" ".join(cell.stripped_strings)) for cell in row.select("th, td")]
+-        cells = [cell for cell in cells if cell]
+-        if len(cells) >= 2 and cells[0].lower().rstrip(":") in wanted:
+-            return clean(" ".join(cells[1:]))
+-    return ""
+-
+-
+ def table_text(soup, selector):
+     table = soup.select_one(selector)
+     return clean(" ".join(table.stripped_strings)) if table else ""
++
++
++def labeled_value(text, patterns):
++    text = clean(text)
++    for pattern in patterns:
++        match = re.search(pattern, text, re.I)
++        if match:
++            return clean(match.group(1))
++    return ""
+ 
+ 
+ def principal_office(soup):
+@@ -109,13 +107,11 @@
+     if not table:
+         return ""
+     values = []
++    labels = {"address", "city", "state", "zip", "country", "principal office", "principal office address"}
+     for row in table.select("tr"):
+-        cells = [clean(" ".join(cell.stripped_strings)) for cell in row.select("th, td")]
+-        cells = [cell for cell in cells if cell]
+-        if not cells:
+-            continue
+-        label = cells[0].lower().rstrip(":")
+-        if label in {"address", "principal office address", "location"}:
++        cells = [clean(" ".join(c.stripped_strings)) for c in row.select("th, td")]
++        cells = [x for x in cells if x]
++        if len(cells) >= 2 and cells[0].lower().rstrip(":") in labels:
+             values.extend(cells[1:])
+         elif len(cells) == 1 and not values:
+             values.append(cells[0])
+@@ -124,12 +120,19 @@
+ 
+ def extract_detail(html, url, source_listing_url, mask_reviews):
+     soup = BeautifulSoup(html or "", "html.parser")
+-    entity_name = table_field(soup, "#MainContent_tblEntity", ["Entity Name", "Name"])
+-    entity_type = table_field(soup, "#MainContent_tblEntityType", ["Entity Type", "Type"])
+-    id_number = table_field(soup, "#MainContent_tblIDNumber", ["ID Number", "Identification Number"])
++    name_text = table_text(soup, "#MainContent_tblEntity")
++    type_text = table_text(soup, "#MainContent_tblEntityType")
++    id_text = table_text(soup, "#MainContent_tblIDNumber")
++    entity_name = labeled_value(name_text, [r"summary\s+for\s*:\s*(.+)$", r"entity\s+name\s*:\s*(.+)$"])
++    entity_name = entity_name or name_text
++    entity_type = labeled_value(type_text, [r"entity\s+type\s*:\s*(.+)$", r"type\s*:\s*(.+)$"]) or type_text
++    id_number = labeled_value(id_text, [r"identification\s+number\s*:\s*(.+)$", r"id\s+number\s*:\s*(.+)$"]) or id_text
+     office = principal_office(soup)
+-    status = table_field(soup, "#MainContent_tblStatus", ["Current Status", "Status"])
++    status = table_text(soup, "#MainContent_tblStatus")
++    status = labeled_value(status, [r"current\s+status\s*:\s*(.+)$", r"status\s*:\s*(.+)$"]) or status
+     if mask_reviews:
++        entity_name = mask_reviewer_pii(entity_name)
++        entity_type = mask_reviewer_pii(entity_type)
+         office = mask_reviewer_pii(office)
+     return {
+         "product_id": canonical_product_id(url),
+@@ -145,14 +148,7 @@
+ 
+ 
+ async def dismiss_cookie_banner(page):
+-    selectors = [
+-        "button:has-text('Accept')",
+-        "button:has-text('Allow all')",
+-        "button:has-text('I agree')",
+-        "[id*='cookie' i] button",
+-        "[class*='cookie' i] button",
+-    ]
+-    for selector in selectors:
++    for selector in ("button:has-text('Accept')", "button:has-text('Allow all')", "button:has-text('I agree')", "[id*='cookie' i] button", "[class*='cookie' i] button"):
+         locator = page.locator(selector).first
+         try:
+             if await locator.is_visible(timeout=500):
+@@ -192,8 +188,7 @@
+         return None, ""
+     await dismiss_cookie_banner(page)
+     html = await page.content()
+-    status = response.status if response else 0
+-    blocked = detect_anti_bot_signals(status, html)
++    blocked = detect_anti_bot_signals(response.status if response else 0, html)
+     if blocked:
+         flags.append({"Type": blocked, "URL": page.url, "Message": blocked})
+         log(f"{blocked}: {page.url}")
+@@ -203,36 +198,33 @@
+ 
+ async def get_detail(page, url, source_listing_url, mask_reviews, flags):
+     response, html = await goto_checked(page, url, flags)
+-    if isinstance(html, str) and html == "Blocked by bot protection":
++    if html == "Blocked by bot protection":
+         return None, True
+     if not html:
+         return None, False
+     return extract_detail(html, page.url, source_listing_url, mask_reviews), False
+ 
+ 
+-async def wait_for_new_grid(page, old_signature):
++async def wait_for_grid_change(page, old_signature):
+     try:
+         await page.wait_for_load_state("networkidle", timeout=30000)
+     except PlaywrightTimeoutError:
+         pass
+-    try:
+-        await page.wait_for_selector(GRID_SELECTOR, timeout=30000)
+-        for _ in range(30):
+-            signature = await page.locator(GRID_SELECTOR).inner_text()
+-            if signature != old_signature:
+-                return True
+-            await page.wait_for_timeout(200)
+-    except PlaywrightTimeoutError:
+-        return False
++    await page.wait_for_selector(GRID_SELECTOR, timeout=30000)
++    for _ in range(40):
++        current = await page.locator(GRID_SELECTOR).inner_text()
++        if current != old_signature:
++            return True
++        await page.wait_for_timeout(250)
+     return False
+ 
+ 
+ async def extract_listing(page, listing_url, keyword, limit, mask_reviews, flags):
+     response, html = await goto_checked(page, listing_url, flags)
+     if html == "Blocked by bot protection":
+-        return [], True
++        return [], True, 0, 0
+     if not html:
+-        return [], False
++        return [], False, 0, 0
+     try:
+         await page.wait_for_selector("#MainContent_rdoByEntityName", timeout=20000)
+         radio = page.locator("#MainContent_rdoByEntityName")
+@@ -241,115 +233,118 @@
+         if keyword:
+             await page.locator("#MainContent_txtEntityName").fill(keyword)
+         await page.locator("#MainContent_ddBeginsWithEntityName").select_option("B")
+-        if not await safe_click(page, page.locator("#MainContent_btnSearch"), "#MainContent_btnSearch", flags, page.url):
+-            return [], False
++        submit = page.locator("#MainContent_btnSearch")
++        if not await safe_click(page, submit, "#MainContent_btnSearch", flags, page.url):
++            return [], False, 0, 0
+         await page.wait_for_selector(GRID_SELECTOR, timeout=30000)
+     except Exception as exc:
+         flags.append({"Type": "Error", "URL": page.url, "Message": f"Search failed: {str(exc)[:300]}"})
+-        return [], False
++        return [], False, 0, 0
+ 
+     records = []
+-    seen_signatures = set()
++    links_discovered = 0
++    links_processed = 0
++    seen = set()
+     detail_page = await page.context.new_page()
+     try:
+         while len(records) < limit:
+             grid = page.locator(GRID_SELECTOR)
+             signature = await grid.inner_text()
+-            if signature in seen_signatures:
++            if signature in seen:
+                 break
+-            seen_signatures.add(signature)
++            seen.add(signature)
+             rows = page.locator(ROW_SELECTOR)
+-            links = []
+-            for index in range(await rows.count()):
+-                row = rows.nth(index)
+-                link = row.locator("a.link[href*='CorpSummary.aspx']").first
++            page_links = []
++            for i in range(await rows.count()):
++                row = rows.nth(i)
++                link = row.locator("a[href*='CorpSummary.aspx']").first
+                 if await link.count() == 0:
+                     continue
+                 href = await link.get_attribute("href")
+-                listing_name = clean(await link.inner_text())
++                if not href:
++                    continue
+                 cells = row.locator("td")
+-                cell_values = [clean(await cells.nth(i).inner_text()) for i in range(await cells.count())]
+-                listing_id = cell_values[0] if cell_values else ""
+-                listing_address = cell_values[-1] if cell_values else ""
+-                if href:
+-                    links.append((urljoin(page.url, href), listing_name, listing_id, listing_address))
+-            for detail_url, listing_name, listing_id, listing_address in links:
++                values = [clean(await cells.nth(j).inner_text()) for j in range(await cells.count())]
++                page_links.append((urljoin(page.url, href), clean(await link.inner_text()), values))
++            links_discovered += len(page_links)
++            for detail_url, listing_name, values in page_links:
+                 if len(records) >= limit:
+                     break
+                 record, halted = await get_detail(detail_page, detail_url, page.url, mask_reviews, flags)
++                links_processed += 1
+                 if halted:
+-                    return records, True
++                    return records, True, links_discovered, links_processed
+                 if record:
+                     record["Entity Name"] = record["Entity Name"] or listing_name
+-                    record["ID Number"] = record["ID Number"] or listing_id
+-                    record["Principal Office Address"] = record["Principal Office Address"] or listing_address
++                    record["ID Number"] = record["ID Number"] or (values[0] if values else "")
++                    record["Principal Office Address"] = record["Principal Office Address"] or (values[-1] if values else "")
+                     records.append(record)
+             if len(records) >= limit:
+                 break
+             next_link = None
+             anchors = page.locator(GRID_SELECTOR + " a")
+-            for index in range(await anchors.count()):
+-                anchor = anchors.nth(index)
+-                href = (await anchor.get_attribute("href") or "")
++            for i in range(await anchors.count()):
++                anchor = anchors.nth(i)
++                href = (await anchor.get_attribute("href") or "").lower()
+                 text = clean(await anchor.inner_text()).lower()
+-                if "page$" in href.lower() and (text == "next" or text.isdigit()):
++                if "page$" in href and (text == "next" or text.isdigit()):
+                     next_link = anchor
+                     break
+-            if next_link is None:
++            if next_link is None or not await safe_click(page, next_link, GRID_SELECTOR + " a", flags, page.url):
+                 break
+-            if not await safe_click(page, next_link, GRID_SELECTOR + " a", flags, page.url):
+-                break
+-            if not await wait_for_new_grid(page, signature):
++            if not await wait_for_grid_change(page, signature):
+                 break
+     finally:
+         await detail_page.close()
+-    return records, False
++    return records, False, links_discovered, links_processed
+ 
+ 
+ async def run(args, input_df):
+     records, flags = [], []
+-    rows = input_df.to_dict("records")
+-    categories = len(rows)
+-    status = 0
+-    title = ""
+-    screenshot_page = None
+-    halted = False
++    categories = len(input_df.to_dict("records"))
++    links_discovered = links_processed = 0
++    status, title, halted = 0, "", False
+     async with async_playwright() as playwright:
+-        browser = await playwright.chromium.launch(headless=args.headless, args=["--disable-blink-features=AutomationControlled"])
+-        context = await browser.new_context(user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36")
++        browser = await playwright.chromium.launch(headless=args.headless, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"])
++        context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", viewport={"width": 1920, "height": 1080})
++        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
++        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined}); window.chrome = {runtime: {}};")
+         page = await context.new_page()
+         try:
+-            for row in rows:
++            for row in input_df.to_dict("records"):
+                 if args.max_products is not None and len(records) >= args.max_products:
+                     break
+                 detail_url = value_from_row(row, "detail_url")
+                 listing_url = value_from_row(row, "listing_url") or TARGET_URL
+                 keyword = value_from_row(row, "keyword")
+-                remaining = (args.max_products - len(records)) if args.max_products is not None else 10**9
++                remaining = args.max_products - len(records) if args.max_products is not None else 10**9
+                 if detail_url:
+                     detail_page = await context.new_page()
+                     try:
+                         record, halted = await get_detail(detail_page, urljoin(BASE_URL, detail_url), "DIRECT_INPUT", args.mask_reviews, flags)
++                        links_discovered += 1
++                        links_processed += 1
+                         if record:
+                             records.append(record)
+                     finally:
+                         await detail_page.close()
+                 else:
+-                    found, halted = await extract_listing(page, listing_url, keyword, remaining, args.mask_reviews, flags)
++                    found, halted, discovered, processed = await extract_listing(page, listing_url, keyword, remaining, args.mask_reviews, flags)
+                     records.extend(found)
++                    links_discovered += discovered
++                    links_processed += processed
+                 if halted:
+                     break
+-            screenshot_page = page
+             status = 200
+-            title = await page.title() if page else ""
+-            if not records and page:
++            title = await page.title()
++            if not records:
+                 try:
+                     await page.screenshot(path="diagnostic_screenshot.png", full_page=True)
+                 except Exception as exc:
+                     flags.append({"Type": "Error", "URL": page.url, "Message": f"Screenshot failed: {str(exc)[:200]}"})
+         finally:
+             await browser.close()
+-    return records, flags, categories, halted, status, title
++    return records, flags, categories, links_discovered, links_processed, halted, status, title
+ 
+ 
+ def write_output(records, flags, output_path, source_workbook=None):
+@@ -361,22 +356,23 @@
+         workbook = load_workbook(source)
+     else:
+         workbook = Workbook()
+-    for sheet_name in ("Extracted Data", "Flags"):
+-        if sheet_name in workbook.sheetnames:
+-            del workbook[sheet_name]
++    old_headers = []
++    if "Extracted Data" in workbook.sheetnames:
++        old_headers = [cell.value for cell in workbook["Extracted Data"][1] if cell.value]
++        del workbook["Extracted Data"]
++    if "Flags" in workbook.sheetnames:
++        del workbook["Flags"]
+     data_ws = workbook.create_sheet("Extracted Data", 0)
+     flags_ws = workbook.create_sheet("Flags", 1)
++    standard = ["product_id", "product_url", "source_listing_url", "Entity Name", "ID Number", "Entity Type", "Principal Office Address", "Current Status", "Entity Detail URL"]
++    columns = standard + [x for x in old_headers if x not in standard]
+     safe_records = [{key: sanitize_cell_value(value) for key, value in record.items()} for record in records]
+-    safe_flags = [{key: sanitize_cell_value(value) for key, value in flag.items()} for flag in flags]
+-    data_df = pd.DataFrame(safe_records)
+-    if not data_df.empty:
+-        for row in dataframe_to_rows(data_df, index=False, header=True):
+-            data_ws.append(row)
+-    else:
+-        data_ws.append(["product_id", "product_url", "source_listing_url", "Entity Name", "ID Number", "Entity Type", "Principal Office Address", "Current Status", "Entity Detail URL"])
+-    flag_df = pd.DataFrame(safe_flags, columns=["Type", "URL", "Message"])
+-    for row in dataframe_to_rows(flag_df, index=False, header=True):
+-        flags_ws.append(row)
++    data_ws.append(columns)
++    for record in safe_records:
++        data_ws.append([sanitize_cell_value(record.get(column, "")) for column in columns])
++    flags_ws.append(["Type", "URL", "Message"])
++    for flag in flags:
++        flags_ws.append([sanitize_cell_value(flag.get(k, "")) for k in ("Type", "URL", "Message")])
+     workbook.save(output_path)
+ 
+ 
+@@ -389,7 +385,9 @@
+     parser.add_argument("--mask-reviews", action=argparse.BooleanOptionalAction, default=True)
+     args = parser.parse_args()
+     try:
+-        input_df = pd.read_excel(args.input).fillna("")
++        sheets = pd.read_excel(args.input, sheet_name=None)
++        sheets = {k: v.fillna("") for k, v in sheets.items()}
++        input_df = sheets.get("Extracted Data") or next(iter(sheets.values()), pd.DataFrame())
+     except FileNotFoundError:
+         input_df = pd.DataFrame([{"keyword": "mobius"}])
+         log(f"Input file {args.input} was not found; using keyword 'mobius'.")
+@@ -397,27 +395,24 @@
+         log(f"Unable to read input workbook: {exc}")
+         sys.exit(1)
+     try:
+-        records, flags, categories, halted, status, title = asyncio.run(run(args, input_df))
++        records, flags, categories, discovered, processed, halted, status, title = asyncio.run(run(args, input_df))
+     except Exception as exc:
+         log(f"Fatal crawl error: {exc}")
+-        flags = [{"Type": "Error", "URL": TARGET_URL, "Message": str(exc)[:500]}]
+-        records, categories, halted, status, title = [], len(input_df), False, 0, ""
+-    processed = len(records)
+-    log(f"Crawl Funnel: {categories} categories, {processed} links discovered, {processed} processed, {len(records)} extracted.")
+-    if halted and any(flag.get("Type") == "Blocked by bot protection" for flag in flags):
++        records, flags, categories, discovered, processed, halted, status, title = [], [{"Type": "Error", "URL": TARGET_URL, "Message": str(exc)[:500]}], len(input_df), 0, 0, False, 0, ""
++    log(f"Crawl Funnel: {categories} categories, {discovered} links discovered, {processed} processed, {len(records)} extracted.")
++    if halted and any(x.get("Type") == "Blocked by bot protection" for x in flags):
+         write_output(records, flags, args.output, args.input)
+-        log("Blocked by bot protection; stopped without retries.")
+         sys.exit(1)
+     if not records:
+-        soup = BeautifulSoup("", "html.parser")
+-        safe_title = soup.title.get_text(strip=True) if soup.title else title
++        safe_title = clean(title)
+         flags.append({"Type": "Error", "URL": TARGET_URL, "Message": f"No product records found: HTTP {status}, Title: '{safe_title}', Screenshot: diagnostic_screenshot.png"})
+         log(f"No product records found: HTTP {status}, Title: '{safe_title}', Screenshot: diagnostic_screenshot.png")
+         log("ERROR: Zero product records were extracted. Aborting.")
+         write_output(records, flags, args.output, args.input)
+         sys.exit(1)
++    required = ["product_id", "product_url", "source_listing_url", "Entity Name", "ID Number", "Entity Type", "Principal Office Address", "Current Status", "Entity Detail URL"]
+     for record in records:
+-        for field in ("product_id", "product_url", "source_listing_url", "Entity Name", "ID Number", "Entity Type", "Principal Office Address", "Current Status", "Entity Detail URL"):
++        for field in required:
+             if not clean(record.get(field)):
+                 flags.append({"Type": "Missing Field", "URL": record.get("product_url", ""), "Message": f"Missing {field}"})
+     write_output(records, flags, args.output, args.input)

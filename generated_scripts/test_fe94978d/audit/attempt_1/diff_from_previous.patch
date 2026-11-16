@@ -1,0 +1,415 @@
+--- (New file created)
++++ attempt_1.py
+@@ -0,0 +1,412 @@
++import argparse
++import asyncio
++import hashlib
++import json
++import re
++import sys
++from datetime import datetime
++
++import pandas as pd
++from bs4 import BeautifulSoup
++from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
++
++TARGET_URL = "https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx?FiltroVisivel=True"
++SEARCH_INPUT = "#RichWidgets_wt104_block_wtMainContent_wt170"
++SEARCH_BUTTON = "#RichWidgets_wt104_block_wtMainContent_wt201"
++CLEAR_BUTTON = "#RichWidgets_wt104_block_wtMainContent_wt22"
++
++
++def log(message):
++    print(f"[{datetime.now().isoformat(timespec='seconds')}] {message}", flush=True)
++
++
++def sanitize_cell_value(val, max_len=32000):
++    if val is None:
++        return ""
++    if isinstance(val, (dict, list)):
++        s = json.dumps(val, ensure_ascii=False)
++    else:
++        s = str(val)
++    if len(s) > max_len:
++        return s[:max_len - 35] + "... [TRUNCATED_EXCEL_LIMIT]"
++    return s
++
++
++def clean(value):
++    if value is None or pd.isna(value) or str(value).strip().lower() in ("", "nan", "none", "null"):
++        return ""
++    try:
++        if pd.isna(value):
++            return ""
++    except (TypeError, ValueError):
++        pass
++    value = str(value).strip()
++    if value.lower() in {"nan", "none", "null"}:
++        return ""
++    return value
++
++
++def value_from_row(row, name):
++    if name not in row:
++        return ""
++    return clean(row[name])
++
++
++def mask_review_text(text):
++    text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "***@***.***", text)
++
++    def mask_name(match):
++        parts = match.group(0).split()
++        return " ".join((p[0] + "***" if p else p) for p in parts[:-1]) + (" " if len(parts) > 1 else "") + (parts[-1][0] + "." if parts else "")
++
++    return re.sub(r"\b[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][a-záàãâéêíóôõúç]+\s+[A-ZÁÀÃÂÉÊÍÓÔÕÚÇ][a-záàãâêíóôõúç]+\b", mask_name, text)
++
++
++def canonical_id(url):
++    return "url-" + hashlib.sha256(url.encode("utf-8")).hexdigest()[:20]
++
++
++def safe_title(soup):
++    return (soup.title.get_text(strip=True) if getattr(soup, "title", None) else "") if getattr(soup, "title", None) else ""
++
++
++def soup_text(soup):
++    return soup.get_text("\n", strip=True).replace("\xa0", " ")
++
++
++def read_inputs(path):
++    try:
++        input_df = pd.read_excel(path).fillna("")
++    except Exception as exc:
++        log(f"Unable to read input workbook: {exc}")
++        raise
++    known = {"keyword", "listing_url", "detail_url"}
++    normalized = {str(c).strip().lower() for c in input_df.columns}
++    if not normalized.intersection(known):
++        raw = pd.read_excel(path, header=None).fillna("")
++        input_df = pd.DataFrame({"keyword": raw.iloc[:, 0] if not raw.empty else []}).fillna("")
++    else:
++        rename = {c: str(c).strip().lower() for c in input_df.columns}
++        input_df = input_df.rename(columns=rename)
++    for col in known:
++        if col not in input_df.columns:
++            input_df[col] = ""
++    return input_df.fillna("")
++
++
++def detect_anti_bot_signals(status, html):
++    markers = (
++        "cloudflare turnstile", "cf-browser-verification", "ray id:", "just a moment...",
++        "datadome", "perimeterx", "px-captcha", "distil networks", "press & hold",
++        "incapsula", "_incapsula_resource", "imperva", "incident id", "kasada",
++        "akamai", "shieldsquare", "security challenge", "pardon our interruption",
++        "potential security risk", "detected automated scripts", "additional security check",
++        "i am human", "hcaptcha", "access denied", "robot or human"
++    )
++    text = (html or "").lower()
++    found = [marker for marker in markers if marker in text]
++    return status in {403, 429} or bool(found), found
++
++
++async def dismiss_cookie_banner(page):
++    for selector in [
++        "button:has-text('Accept')", "button:has-text('Aceitar')",
++        "button:has-text('Concordo')", "[id*='cookie' i] button",
++        "[class*='cookie' i] button"
++    ]:
++        try:
++            loc = page.locator(selector).first
++            if await loc.is_visible(timeout=800):
++                await loc.click(timeout=1500)
++                return
++        except Exception:
++            continue
++
++
++async def safe_click(page, locator, selector, flags, url):
++    try:
++        await locator.click(timeout=5000)
++        return True
++    except Exception as exc:
++        log(f"Click blocked on locator '{selector}': {exc}")
++        flags.append({"Type": "Click Intercepted", "URL": url, "Message": f"Element {selector} blocked: {str(exc)[:200]}"})
++        try:
++            await page.keyboard.press("Escape")
++            await locator.click(timeout=2000)
++            return True
++        except Exception:
++            try:
++                await locator.evaluate("el => el.click()")
++                return True
++            except Exception:
++                return False
++
++
++async def page_snapshot(page):
++    html = await page.content()
++    status = page.request? if False else None
++    return html, status
++
++
++def extract_table_rows(soup):
++    table = None
++    for candidate in soup.find_all("table"):
++        headers = [clean(x.get_text(" ", strip=True)).lower() for x in candidate.find_all("th")]
++        if any("nome" in h for h in headers) and any("local" in h for h in headers):
++            table = candidate
++            break
++    if table is None:
++        return []
++    headers = [clean(x.get_text(" ", strip=True)) for x in table.find_all("th")]
++    rows = []
++    for tr in table.find_all("tr"):
++        cells = tr.find_all(["td", "th"])
++        if not cells or cells[0].name == "th":
++            continue
++        values = [clean(c.get_text(" ", strip=True)) for c in cells]
++        row = {headers[i] if i < len(headers) else f"column_{i + 1}": values[i] for i in range(len(values))}
++        detail = tr.find("a", href=True)
++        if detail:
++            row["__detail_href"] = detail.get("href", "")
++        row["__detail_anchor"] = str(tr)
++        rows.append(row)
++    return rows
++
++
++def mapped_row(row):
++    result = {}
++    for key, value in row.items():
++        if key.startswith("__"):
++            continue
++        low = key.lower()
++        if low.startswith("nº") or low.startswith("n\u00ba") or low == "n":
++            result["Nº"] = value
++        elif "data" == low:
++            result["Data"] = value
++        elif "nome" in low:
++            result["Nome"] = value
++        elif "tipologia" in low:
++            result["Tipologia"] = value
++        elif "capacidade" in low or "capacity" in low:
++            result["Capacidade"] = value
++        elif "local" in low:
++            result["Localização"] = value
++        elif "certifica" in low:
++            result["Certificações"] = value
++    for key in ["Nº", "Data", "Nome", "Tipologia", "Capacidade", "Localização", "Certificações"]:
++        result.setdefault(key, "")
++    return result
++
++
++def extract_detail(soup):
++    text = soup_text(soup)
++
++    def after(labels):
++        pattern = r"(?:" + "|".join(re.escape(x) for x in labels) + r")\s*[:\-]?\s*([^\n]+)"
++        match = re.search(pattern, text, re.I)
++        return clean(match.group(1)) if match else ""
++
++    heading = soup.find(["h1", "h2"])
++    heading_text = clean(heading.get_text(" ", strip=True)) if heading else ""
++    return {
++        "RNET nº": after(["RNET nº", "RNET n.º", "RNET"]),
++        "Data de Registo": after(["Registado em", "Data de Registo"]),
++        "Tipologia Completa": after(["Tipologia Completa", "Tipologia"]),
++        "Morada e Código Postal": after(["Morada", "Endereço", "Morada e Código Postal"]),
++        "Contactos": after(["Contactos", "Contactos:"]),
++        "Marca Comercial": after(["Marca Comercial", "Marca"]),
++        "Entidade Exploradora": after(["Entidade Exploradora", "Entidade exploradora"]),
++        "NIF / NIPC": after(["NIF", "NIPC"]),
++        "Detail Heading": heading_text,
++    }
++
++
++async def export_for_keyword(page, keyword, flags):
++    selectors = ["text=Exportar detalhe registos", "a:has-text('Exportar detalhe registos')", "button:has-text('Exportar detalhe registos')"]
++    for selector in selectors:
++        loc = page.locator(selector).first
++        try:
++            if await loc.is_visible(timeout=700):
++                async with page.expect_download(timeout=7000) as download_info:
++                    if not await safe_click(page, loc, selector, flags, page.url):
++                        return
++                download = await download_info.value
++                await download.save_as(f"{keyword}.xlsx")
++                log(f"Saved export for keyword '{keyword}'")
++                return
++        except Exception:
++            continue
++    flags.append({"Type": "Missing field", "URL": page.url, "Message": "Exportar detalhe registos was not observed or did not download."})
++
++
++async def inspect_detail(context, url, source_url, mask_reviews, flags):
++    page = await context.new_page()
++    try:
++        response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
++        await dismiss_cookie_banner(page)
++        html = await page.content()
++        blocked, markers = detect_anti_bot_signals(response.status if response else 0, html)
++        if blocked:
++            flags.append({"Type": "Blocked by bot protection", "URL": url, "Message": ", ".join(markers) or str(response.status)})
++            return None
++        soup = BeautifulSoup(html, "html.parser")
++        data = extract_detail(soup)
++        if mask_reviews:
++            data = {k: mask_review_text(v) if "review" in k.lower() else v for k, v in data.items()}
++        data.update({"product_id": canonical_id(url), "product_url": url, "source_listing_url": source_url})
++        for field in ["RNET nº", "Data de Registo", "Tipologia Completa", "Morada e Código Postal", "Contactos", "Marca Comercial", "Entidade Exploradora", "NIF / NIPC"]:
++            if not data.get(field):
++                flags.append({"Type": "Missing field", "URL": url, "Message": field})
++        return data
++    except Exception as exc:
++        flags.append({"Type": "Error", "URL": url, "Message": str(exc)[:500]})
++        return None
++    finally:
++        await page.close()
++
++
++async def crawl_listing(context, url, keyword, max_products, mask_reviews, records, flags):
++    page = await context.new_page()
++    try:
++        response = await page.goto(url, wait_until="domcontentloaded", timeout=30000)
++        await dismiss_cookie_banner(page)
++        html = await page.content()
++        blocked, markers = detect_anti_bot_signals(response.status if response else 0, html)
++        if blocked:
++            flags.append({"Type": "Blocked by bot protection", "URL": url, "Message": ", ".join(markers) or str(response.status)})
++            return
++        if keyword:
++            try:
++                await page.locator(SEARCH_INPUT).fill("")
++                await page.locator(SEARCH_INPUT).fill(keyword)
++                button = page.locator(SEARCH_BUTTON)
++                if not await safe_click(page, button, SEARCH_BUTTON, flags, page.url):
++                    return
++                try:
++                    await page.wait_for_selector("table", timeout=15000)
++                except PlaywrightTimeoutError:
++                    await page.wait_for_timeout(3000)
++            except Exception as exc:
++                flags.append({"Type": "Error", "URL": page.url, "Message": f"Search failed: {exc}"})
++                return
++        await export_for_keyword(page, keyword or "export", flags)
++        while True:
++            await page.wait_for_timeout(500)
++            soup = BeautifulSoup(await page.content(), "html.parser")
++            rows = extract_table_rows(soup)
++            if not rows:
++                break
++            for raw in rows:
++                if max_products is not None and len(records) >= max_products:
++                    return
++                item = mapped_row(raw)
++                href = raw.get("__detail_href", "")
++                if href:
++                    detail_url = str(page.url).split("#")[0].rsplit("/", 1)[0] + "/" + href.lstrip("/") if not href.startswith("http") else href
++                else:
++                    detail_url = page.url + "#" + hashlib.sha1(item.get("Nº", item.get("Nome", "")).encode()).hexdigest()[:12]
++                    flags.append({"Type": "Low-confidence extraction", "URL": page.url, "Message": "No verified detail href in result row."})
++                detail = await inspect_detail(context, detail_url, url, mask_reviews, flags) if href else {}
++                record = {**item, **(detail or {})}
++                record.update({"product_id": canonical_id(detail_url), "product_url": detail_url, "source_listing_url": url})
++                records.append(record)
++            next_loc = page.locator("a", has_text=re.compile(r"próximo", re.I)).first
++            try:
++                if not await next_loc.is_visible(timeout=700):
++                    break
++                classes = (await next_loc.get_attribute("class") or "").lower()
++                if "disabled" in classes or await next_loc.get_attribute("aria-disabled") == "true":
++                    break
++                old = await page.locator("body").inner_text()
++                if not await safe_click(page, next_loc, "a:has-text('próximo')", flags, page.url):
++                    break
++                await page.wait_for_function("old => document.body.innerText !== old", arg=old, timeout=15000)
++            except Exception:
++                break
++    finally:
++        await page.close()
++
++
++async def run(args):
++    input_df = read_inputs(args.input)
++    records = []
++    flags = []
++    async with async_playwright() as pw:
++        browser = await pw.chromium.launch(headless=args.headless, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"])
++        context = await browser.new_context(
++            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
++            viewport={"width": 1920, "height": 1080},
++            accept_downloads=True,
++        )
++        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
++        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
++        for _, row in input_df.iterrows():
++            if args.max_products is not None and len(records) >= args.max_products:
++                break
++            keyword = value_from_row(row, "keyword")
++            listing_url = value_from_row(row, "listing_url") or TARGET_URL
++            detail_url = value_from_row(row, "detail_url")
++            if detail_url:
++                log(f"Scraping direct detail URL: {detail_url}")
++                detail = await inspect_detail(context, detail_url, "DIRECT_INPUT", args.mask_reviews, flags)
++                if detail:
++                    records.append(detail)
++            else:
++                log(f"Crawling listing URL {listing_url} with keyword '{keyword}'")
++                await crawl_listing(context, listing_url, keyword, args.max_products, args.mask_reviews, records, flags)
++        await browser.close()
++    log(f"Crawl Funnel: {len(input_df)} categories, {len(records)} links discovered, {len(records)} processed, {len(records)} extracted.")
++    return records, flags
++
++
++async def diagnostic(args):
++    async with async_playwright() as pw:
++        browser = await pw.chromium.launch(headless=args.headless, args=["--no-sandbox"])
++        page = await browser.new_page()
++        response = await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=30000)
++        await dismiss_cookie_banner(page)
++        title = await page.title()
++        await page.screenshot(path="diagnostic_screenshot.png", full_page=True)
++        status = response.status if response else 0
++        log(f"No product records found: HTTP {status}, Title: '{title}', Screenshot: diagnostic_screenshot.png")
++        await browser.close()
++
++
++def write_output(path, records, flags):
++    columns = ["product_id", "product_url", "source_listing_url", "Nº", "Data", "Nome", "Tipologia", "Capacidade", "Localização", "Certificações", "RNET nº", "Data de Registo", "Tipologia Completa", "Morada e Código Postal", "Contactos", "Marca Comercial", "Entidade Exploradora", "NIF / NIPC", "Detail Heading"]
++    data = []
++    for record in records:
++        data.append({col: sanitize_cell_value(record.get(col, "")) for col in columns})
++    flag_rows = [{"Type": sanitize_cell_value(x.get("Type")), "URL": sanitize_cell_value(x.get("URL")), "Message": sanitize_cell_value(x.get("Message"))} for x in flags]
++    with pd.ExcelWriter(path, engine="openpyxl") as writer:
++        pd.DataFrame(data, columns=columns).to_excel(writer, sheet_name="Extracted Data", index=False)
++        pd.DataFrame(flag_rows, columns=["Type", "URL", "Message"]).to_excel(writer, sheet_name="Flags", index=False)
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--input", default="input.xlsx")
++    parser.add_argument("--output", default="output.xlsx")
++    parser.add_argument("--max-products", type=int, default=None)
++    parser.add_argument("--headless", action="store_true", default=True)
++    parser.add_argument("--visible", dest="headless", action="store_false")
++    parser.add_argument("--mask-reviews", action="store_true", default=True)
++    parser.add_argument("--no-mask-reviews", dest="mask_reviews", action="store_false")
++    args = parser.parse_args()
++    try:
++        records, flags = asyncio.run(run(args))
++        if not records:
++            asyncio.run(diagnostic(args))
++            log("ERROR: Zero product records were extracted. Aborting.")
++            sys.exit(1)
++        write_output(args.output, records, flags)
++        log(f"Wrote {len(records)} records to {args.output}")
++    except SystemExit:
++        raise
++    except Exception as exc:
++        log(f"ERROR: {exc}")
++        sys.exit(1)
++
++
++if __name__ == "__main__":
++    main()

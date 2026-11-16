@@ -1,0 +1,16 @@
+{
+  "confidence_notes": [
+    "The live site kept search results on CorpSearch.aspx after ASP.NET postback, despite the requester mentioning CorpSearchResults.aspx; the script follows the inspected live behavior.",
+    "The script uses Playwright because search submission and pagination require ASP.NET postbacks and JavaScript; requests is used for HTTP preflight/status diagnostics rather than a nonexistent entity-data API.",
+    "Only the first results page was inspected directly; page-2 handling is implemented from the observed __doPostBack pagination pattern but was not verified live.",
+    "Current Status was not visible in the inspected detail summary. The script checks #MainContent_tblStatus and records a missing-field flag when it is absent, without inventing a value.",
+    "Entity Type and detail-page fields are extracted from label/value rows where available, with conservative table-text fallbacks because the exact internal row markup was not provided.",
+    "Reviewer, registered-agent, resident, and officer tables are not extracted. No review accordion is opened; mask_reviews is retained as a contract-compatible option.",
+    "The requested diagnostic screenshot is logged on zero records, but a screenshot cannot be guaranteed if browser startup or navigation fails before a usable Playwright page exists.",
+    "Product IDs use the detail URL sysvalue consistently, falling back to a URL-derived identifier only when sysvalue is unavailable.",
+    "The fallback input keyword 'mobius' is used only when input.xlsx is absent; this assumption is based on the inspection sample and is noted for operational transparency.",
+    "Duplicate-looking entities are preserved and are not deduplicated."
+  ],
+  "total_tool_calls": 11,
+  "target_url": "https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSearch.aspx"
+}

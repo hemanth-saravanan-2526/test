@@ -1,0 +1,6 @@
+{
+  "exit_code": 1,
+  "error_summary": "[2026-10-28T11:14:21] No product records found: HTTP 0, Title: 'Pesquisa RNET | RNT', Screenshot: diagnostic_screenshot.png\r\n[2026-10-28T11:14:21] Crawl Funnel: 5 categories, 0 links discovered, 0 processed, 0 extracted.\r\n[2026-10-28T11:14:22] ERROR: Zero product records were extracted. Aborting.\r\n",
+  "stderr_tail": "",
+  "stdout_tail": "[2026-10-28T11:14:21] No product records found: HTTP 0, Title: 'Pesquisa RNET | RNT', Screenshot: diagnostic_screenshot.png\r\n[2026-10-28T11:14:21] Crawl Funnel: 5 categories, 0 links discovered, 0 processed, 0 extracted.\r\n[2026-10-28T11:14:22] ERROR: Zero product records were extracted. Aborting.\r\n"
+}

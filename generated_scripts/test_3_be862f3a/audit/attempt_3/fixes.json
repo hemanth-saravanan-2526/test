@@ -1,0 +1,26 @@
+{
+  "strategy": "live_mcp_codegen_repair",
+  "working_listing_selectors": {
+    "table": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos",
+    "valid_rows": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tr:has(td)",
+    "detail_links": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tr a[href*='RNET.aspx?nr=']",
+    "next_page": ".ListNavigation_Next",
+    "search_input": "#RichWidgets_wt104_block_wtMainContent_wtInput_FiltroTexto",
+    "search_button": "#RichWidgets_wt104_block_wtMainContent_wt201",
+    "clear_button": "#RichWidgets_wt104_block_wtMainContent_wt22",
+    "verified_sample_count": 10
+  },
+  "working_detail_selectors": {
+    "detail_table": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento",
+    "operating_table": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowFuncionamento",
+    "rnet_heading": "body text matching 'RNET n\u00ba'",
+    "registration_date": "body text matching 'Registado em'",
+    "classification": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr",
+    "address": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr",
+    "contacts": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr",
+    "brand": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr",
+    "operator": "body text/table row matching 'Entidade exploradora'",
+    "tax_number": "body text/table row matching 'Entidade exploradora'"
+  },
+  "working_price_selector": "none; this is a registry/accommodation site and no product pricing or buy box exists"
+}

@@ -1,0 +1,13 @@
+{
+  "confidence_notes": [
+    "The inspection observed no network API, so this script intentionally uses Playwright for the OutSystems/ASP.NET AJAX flow and BeautifulSoup for rendered HTML parsing.",
+    "Pagination was not tested during inspection; the script follows the observed .ListNavigation_Next selector and uses a best-effort content-change wait.",
+    "The exact semantic order of listing-table cells was inferred from the supplied sample-cell description; raw listing_cells is retained alongside mapped fields.",
+    "Detail fields are label-derived from the observed ShowRecord tables. Unobserved labels and alternate markup may not be captured.",
+    "Reviewer/contact, owner, responsible-person, phone, and email values are redacted conservatively; the findings specifically require masking those values.",
+    "The supplied sample date is future-dated relative to some execution environments and is preserved as site text without validation.",
+    "The mandatory product schema is adapted to accommodation listings: registration number or a deterministic URL hash is used as product_id, and no price is extracted because this site is not a retail product site."
+  ],
+  "anti_bot_marker": null,
+  "total_tool_calls": 12
+}

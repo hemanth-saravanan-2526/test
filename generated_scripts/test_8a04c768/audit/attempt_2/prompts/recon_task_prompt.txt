@@ -1,0 +1,469 @@
+You are performing an autonomous DIAGNOSTIC LIVE INSPECTION for a failing web scraper in Scraper Studio.
+YOU DO NOT WRITE CODE IN THIS PHASE. You must use the browser tool to inspect the live target website, identify the true root cause of failure, and discover working selectors.
+
+TARGET URL: https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+Sample keyword tested: a
+
+SCRAPER INTENT & USER RULES:
+- Search rules: Read Inputs: Read each search keyword one by one from Column A of input.xlsx (treat the first row as data if there is no column header).
+Search Field: Type the keyword into the "Empreendimento Nome/Marca" text box.
+Submit: Click the green "Pesquisar" button.
+Wait: Wait until the results table and record count (e.g., "1 a 10 de ... registos") finish loading before proceeding.
+Reset for Next Input: When moving to the next keyword, clear the search text box or click "Limpar" before typing the new keyword.
+- Filter rules: none specified
+- Navigation rules: Process Listings: On the current search results page, open and extract the detail page data for all 10 listings one by one.
+Paginate: After extracting all listings on the current page, check the pagination at the bottom. If the "próximo" link is available and active, click "próximo", wait for the next set of 10 rows to load, and repeat the extraction.
+Next Keyword: Once all result pages for the current search keyword are completed, return to the search form, clear the input box, enter the next keyword from input.xlsx, and repeat the entire workflow.
+- Extraction rules: List Page Data: From the results table on every page, extract:
+
+Nº (Registration number)
+Data (Registration date)
+Nome (Property name)
+Tipologia (Accommodation type and stars)
+Capacidade (Number shown under the bed icon)
+Localização (Location / municipality)
+Certificações (Quality or sustainability certification)
+
+Detail Page Data: Click the + icon next to each listing (open in a new tab to avoid losing your place) and extract:
+
+RNET nº (Located in the top heading)
+Data de Registo (Date after "Registado em")
+Tipologia Completa (Full property category)
+Morada e Código Postal (Street address, postal code, and municipality)
+Contactos (Phone number, email, and website)
+Marca Comercial (Brand or commercial name)
+Entidade Exploradora (Operating company name)
+NIF / NIPC (VAT / tax number found under "Entidade exploradora")
+Mask reviewer PII and skip review accordions.
+
+
+- EXISTING SHEETS REQUIRED: ['Extracted Data', 'Flags']
+
+TEST RUN FAILURE DETAILS:
+- Exit code: 1
+- Meaningful extracted rows: 0
+- Failure summary: [2026-10-26T14:50:07] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T14:56:23] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T14:57:17] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:17:51] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:18:39] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:21:03] Crawl Funnel: 9545 categories, 0 links discovered, 0 processed, 0 extracted.
+[2026-10-26T15:21:04] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:21:07] No product records found: HTTP 200, Title: 'Pesquisa RNET | RNT', Screenshot: diagnostic_screenshot.png
+[2026-10-26T15:21:07] ERROR: Zero product records were extracted. Aborting.
+
+
+PRIOR REPAIR ATTEMPTS & CUMULATIVE OUTCOMES (CONTEXT RETENTION ACROSS RETRIES):
+- Attempt 1: Error:  | Prior Diagnosis:  | Fixes Tried: 
+CRITICAL: Do not repeat failed inspection assumptions or selectors that failed in prior attempts.
+
+
+STANDARD ERROR / TRACEBACK:
+```
+[2026-10-26T14:50:07] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T14:56:23] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T14:57:17] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:17:51] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:18:39] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:21:03] Crawl Funnel: 9545 categories, 0 links discovered, 0 processed, 0 extracted.
+[2026-10-26T15:21:04] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:21:07] No product records found: HTTP 200, Title: 'Pesquisa RNET | RNT', Screenshot: diagnostic_screenshot.png
+[2026-10-26T15:21:07] ERROR: Zero product records were extracted. Aborting.
+
+```
+
+STANDARD OUTPUT SNIPPET (Funnel / Logs):
+```
+[2026-10-26T14:50:07] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T14:56:23] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T14:57:17] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:17:51] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:18:39] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:21:03] Crawl Funnel: 9545 categories, 0 links discovered, 0 processed, 0 extracted.
+[2026-10-26T15:21:04] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+[2026-10-26T15:21:07] No product records found: HTTP 200, Title: 'Pesquisa RNET | RNT', Screenshot: diagnostic_screenshot.png
+[2026-10-26T15:21:07] ERROR: Zero product records were extracted. Aborting.
+
+```
+
+PRIOR INSPECTION FINDINGS:
+{
+  "generated_code": "import argparse\nimport asyncio\nimport json\nimport re\nimport sys\nfrom datetime import datetime\nfrom urllib.parse import urljoin, urlparse\n\nimport pandas as pd\nfrom bs4 import BeautifulSoup\nfrom playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError\n\nTARGET_URL = \"https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\"\n\n\ndef log(message):\n    print(f\"[{datetime.now().isoformat(timespec='seconds')}] {message}\", flush=True)\n\n\ndef sanitize_cell_value(val, max_len=32000):\n    if val is None:\n        return \"\"\n    if isinstance(val, (dict, list)):\n        s = json.dumps(val, ensure_ascii=False)\n    else:\n        s = str(val)\n    if len(s) > max_len:\n        return s[:max_len - 35] + \"... [TRUNCATED_EXCEL_LIMIT]\"\n    return s\n\n\ndef clean(value):\n    if value is None or pd.isna(value) or str(value).strip().lower() in (\"\", \"nan\", \"none\", \"null\"):\n        return \"\"\n    try:\n        if pd.isna(value):\n            return \"\"\n    except (TypeError, ValueError):\n        pass\n    text = str(value).strip()\n    if text.lower() in {\"nan\", \"none\", \"null\"}:\n        return \"\"\n    return text\n\n\ndef value_from_row(row, key):\n    if key not in row.index:\n        return \"\"\n    return clean(row[key])\n\n\ndef mask_reviewer_pii(text):\n    if not text:\n        return text\n    text = re.sub(r\"[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}\", \"***@***.***\", text)\n\n    def mask_name(match):\n        parts = match.group(0).split()\n        return \" \".join(f\"{p[0]}***\" if len(p) > 1 else p for p in parts[:-1]) + (f\" {parts[-1][0]}.\" if parts else \"\")\n\n    return re.sub(r\"\\b[A-Z\u00c0-\u00d6\u00d8-\u00dd][a-z\u00e0-\u00f6\u00f8-\u00ff]+\\s+[A-Z\u00c0-\u00d6\u00d8-\u00dd][a-z\u00e0-\u00f6\u00f8-\u00ff]+\\b\", mask_name, text)\n\n\ndef extract_registration(url, text=\"\"):\n    match = re.search(r\"[?&]nr=(\\d+)\", url or \"\", re.I)\n    if match:\n        return match.group(1)\n    match = re.search(r\"RNET\\s*n?[\u00bao]?\\s*(\\d+)\", text or \"\", re.I)\n    return match.group(1) if match else \"\"\n\n\ndef detect_anti_bot_signals(status, html):\n    markers = (\n        \"cloudflare turnstile\", \"cf-browser-verification\", \"ray id:\", \"just a moment...\",\n        \"datadome\", \"perimeterx\", \"px-captcha\", \"distil networks\", \"press & hold\",\n        \"incapsula\", \"_incapsula_resource\", \"imperva\", \"incident id\", \"kasada\",\n        \"akamai\", \"shieldsquare\", \"security challenge\", \"pardon our interruption\",\n        \"potential security risk\", \"detected automated scripts\", \"additional security check\",\n        \"i am human\", \"hcaptcha\", \"access denied\", \"robot or human\"\n    )\n    lower = (html or \"\").lower()\n    matched = [marker for marker in markers if marker in lower]\n    return status in {403, 429} or bool(matched), matched\n\n\nasync def dismiss_cookie_banner(page):\n    # No banner was observed during inspection; this is a harmless defensive fallback.\n    for selector in [\n        \"button:has-text('Accept')\", \"button:has-text('Aceitar')\",\n        \"button:has-text('Agree')\", \"[id*='cookie' i] button\"\n    ]:\n        try:\n            locator = page.locator(selector).first\n            if await locator.is_visible(timeout=500):\n                await locator.click(timeout=1000)\n                return\n        except Exception:\n            pass\n\n\nclass Scraper:\n    def __init__(self, args):\n        self.args = args\n        self.flags = []\n        self.records = []\n        self.categories_discovered = 0\n        self.links_discovered = 0\n        self.links_processed = 0\n        self.records_extracted = 0\n        self.stop_for_antibot = False\n\n    def flag(self, kind, url, message):\n        self.flags.append({\"Type\": kind, \"URL\": url or \"\", \"Message\": str(message)[:1000]})\n\n    async def goto(self, page, url):\n        log(f\"Opening {url}\")\n        try:\n            response = await page.goto(url, wait_until=\"domcontentloaded\", timeout=60000)\n            await dismiss_cookie_banner(page)\n            html = await page.content()\n            status = response.status if response else 0\n            blocked, markers = detect_anti_bot_signals(status, html)\n            if blocked:\n                title = await page.title()\n                message = f\"HTTP {status}; markers: {', '.join(markers)}\"\n                self.flag(\"Blocked by bot protection\", url, message)\n                log(f\"Blocked by bot protection: {message}\")\n                self.stop_for_antibot = True\n            return response, html\n        except Exception as exc:\n            self.flag(\"Error\", url, exc)\n            log(f\"Navigation failed for {url}: {exc}\")\n            return None, \"\"\n\n    async def safe_click(self, page, locator, selector, url):\n        try:\n            await locator.click(timeout=10000)\n            return True\n        except Exception as exc:\n            log(f\"Click blocked on locator '{selector}': {exc}\")\n            self.flag(\"Click Intercepted\", url, f\"Element {selector} blocked: {str(exc)[:200]}\")\n            try:\n                await page.keyboard.press(\"Escape\")\n                await locator.click(timeout=3000)\n                return True\n            except Exception:\n                try:\n                    await locator.evaluate(\"el => el.click()\")\n                    return True\n                except Exception as fallback_exc:\n                    log(f\"Fallback click failed on '{selector}': {fallback_exc}\")\n                    return False\n\n    async def wait_results(self, page):\n        try:\n            await page.wait_for_selector(\"#RichWidgets_wt104_block_wtMainContent_wttrRegistos\", timeout=30000)\n            await page.wait_for_selector(\".Counter_Message\", timeout=30000)\n        except PlaywrightTimeoutError as exc:\n            self.flag(\"Missing field\", page.url, f\"Results table/counter did not load: {exc}\")\n\n    async def parse_listing_page(self, page, source_url):\n        soup = BeautifulSoup(await page.content(), \"html.parser\")\n        table = soup.select_one(\"#RichWidgets_wt104_block_wtMainContent_wttrRegistos\")\n        if not table:\n            return []\n        rows = table.select(\"tr.TableRecords_OddLine, tr.TableRecords_EvenLine\")\n        result = []\n        for row in rows:\n            cells = row.find_all(\"td\")\n            values = [c.get_text(\" \", strip=True).replace(\"\\xa0\", \" \") for c in cells]\n            link = row.select_one(\"a[id$='_wt190'][href*='RNET.aspx?nr=']\")\n            if not link or len(values) < 6:\n                self.flag(\"Low-confidence extraction\", source_url, \"Listing row lacked expected detail link or cells\")\n                continue\n            detail_url = urljoin(source_url, link.get(\"href\", \"\"))\n            registration = extract_registration(detail_url, values[0])\n            item = {\n                \"product_id\": registration,\n                \"product_url\": detail_url,\n                \"source_listing_url\": source_url,\n                \"N\u00ba\": values[0] if values else registration,\n                \"Data\": values[1] if len(values) > 1 else \"\",\n                \"Nome\": values[2] if len(values) > 2 else \"\",\n                \"Tipologia\": values[3] if len(values) > 3 else \"\",\n                \"Capacidade\": values[4] if len(values) > 4 else \"\",\n                \"Localiza\u00e7\u00e3o\": values[5] if len(values) > 5 else \"\",\n                \"Certifica\u00e7\u00f5es\": values[6] if len(values) > 6 else \"\",\n            }\n            result.append(item)\n        return result\n\n    def detail_value(self, soup, labels):\n        labels = [x.lower() for x in labels]\n        for row in soup.select(\"tr\"):\n            cells = row.find_all([\"th\", \"td\"])\n            if len(cells) < 2:\n                continue\n            label = cells[0].get_text(\" \", strip=True).lower()\n            if any(candidate in label for candidate in labels):\n                return cells[1].get_text(\" \", strip=True).replace(\"\\xa0\", \" \")\n        return \"\"\n\n    async def extract_detail(self, context, item, source_listing_url):\n        page = await context.new_page()\n        try:\n            response, html = await self.goto(page, item[\"product_url\"])\n            if self.stop_for_antibot:\n                return None\n            soup = BeautifulSoup(html, \"html.parser\")\n            safe_title = (soup.title.get_text(strip=True) if getattr(soup, \"title\", None) else \"\") if getattr(soup, \"title\", None) else \"\"\n            detail_table = soup.select_one(\"#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento\")\n            full_text = soup.get_text(\"\\n\", strip=True).replace(\"\\xa0\", \" \")\n            heading = full_text[:2000]\n            registration = extract_registration(item[\"product_url\"], heading) or item[\"product_id\"]\n            registered = \"\"\n            match = re.search(r\"Registado\\s+em\\s*[:\\-]?\\s*([^\\n]+)\", full_text, re.I)\n            if match:\n                registered = match.group(1).strip()\n            website = \"\"\n            website_link = soup.select_one(\"#RichWidgets_wt13_block_wtMainContent_wt15_wt247\")\n            if website_link:\n                website = website_link.get(\"href\") or website_link.get_text(\" \", strip=True)\n            contacts = self.detail_value(soup, [\"contactos\"])\n            if website and website not in contacts:\n                contacts = f\"{contacts}; {website}\" if contacts else website\n            operating = \"\"\n            match = re.search(r\"Entidade\\s+exploradora\\s*[:\\-]?\\s*([^\\n]+)\", full_text, re.I)\n            if match:\n                operating = match.group(1).strip()\n            nif = \"\"\n            match = re.search(r\"(?:NIF|NIPC)\\s*[:\\-]?\\s*(\\d[\\d .-]{7,})\", full_text, re.I)\n            if match:\n                nif = re.sub(r\"\\s+\", \"\", match.group(1)).strip(\".-\")\n            record = dict(item)\n            record.update({\n                \"product_id\": registration,\n                \"RNET n\u00ba\": registration,\n                \"Data de Registo\": registered,\n                \"Tipologia Completa\": self.detail_value(soup, [\"tipologia\"]) or item.get(\"Tipologia\", \"\"),\n                \"Morada e C\u00f3digo Postal\": self.detail_value(soup, [\"morada\", \"localiza\u00e7\u00e3o\", \"localizacao\"]),\n                \"Contactos\": contacts,\n                \"Marca Comercial\": self.detail_value(soup, [\"marca comercial\", \"marca\"]),\n                \"Entidade Exploradora\": operating,\n                \"NIF / NIPC\": nif,\n            })\n            if not detail_table:\n                self.flag(\"Low-confidence extraction\", item[\"product_url\"], \"Expected detail table was not found\")\n            for field in [\"Tipologia Completa\", \"Morada e C\u00f3digo Postal\", \"Contactos\", \"Marca Comercial\", \"Entidade Exploradora\", \"NIF / NIPC\"]:\n                if not record.get(field):\n                    self.flag(\"Missing field\", item[\"product_url\"], f\"Missing {field}\")\n            if self.args.mask_reviews:\n                for key, value in list(record.items()):\n                    if \"review\" in key.lower() or \"review\" in str(value).lower():\n                        record[key] = mask_reviewer_pii(value)\n            return record\n        finally:\n            await page.close()\n\n    async def crawl_listing(self, page, context, listing_url, keyword=\"\"):\n        response, html = await self.goto(page, listing_url)\n        if self.stop_for_antibot:\n            return\n        if keyword:\n            input_selector = \"#RichWidgets_wt104_block_wtMainContent_wtInput_FiltroTexto\"\n            submit_selector = \"#RichWidgets_wt104_block_wtMainContent_wt201\"\n            try:\n                await page.wait_for_selector(input_selector, timeout=30000)\n                await page.locator(input_selector).fill(keyword)\n                submit = page.locator(submit_selector)\n                if not await self.safe_click(page, submit, submit_selector, page.url):\n                    return\n                await self.wait_results(page)\n            except Exception as exc:\n                self.flag(\"Error\", page.url, f\"Search failed: {exc}\")\n                return\n        while not self.stop_for_antibot:\n            source_url = page.url\n            items = await self.parse_listing_page(page, source_url)\n            self.links_discovered += len(items)\n            self.categories_discovered += 1\n            for item in items:\n                if self.args.max_products and len(self.records) >= self.args.max_products:\n                    return\n                detail = await self.extract_detail(context, item, source_url)\n                self.links_processed += 1\n                if detail:\n                    self.records.append(detail)\n                    self.records_extracted += 1\n            next_locator = page.locator(\".ListNavigation_Next\").first\n            try:\n                if not await next_locator.count() or not await next_locator.is_visible():\n                    break\n                disabled = await next_locator.get_attribute(\"aria-disabled\")\n                classes = await next_locator.get_attribute(\"class\") or \"\"\n                if disabled == \"true\" or \"disabled\" in classes.lower() or not await next_locator.get_attribute(\"href\"):\n                    break\n                if not await self.safe_click(page, next_locator, \".ListNavigation_Next\", page.url):\n                    break\n                await self.wait_results(page)\n            except Exception as exc:\n                self.flag(\"Error\", page.url, f\"Pagination failed: {exc}\")\n                break\n\n    async def run_row(self, page, context, row):\n        detail_url = value_from_row(row, \"detail_url\")\n        listing_url = value_from_row(row, \"listing_url\") or TARGET_URL\n        keyword = value_from_row(row, \"keyword\")\n        if detail_url:\n            url = urljoin(TARGET_URL, detail_url)\n            item = {\"product_id\": extract_registration(url), \"product_url\": url, \"source_listing_url\": \"DIRECT_INPUT\", \"N\u00ba\": extract_registration(url)}\n            detail = await self.extract_detail(context, item, \"DIRECT_INPUT\")\n            if detail:\n                self.records.append(detail)\n                self.links_processed += 1\n                self.records_extracted += 1\n            return\n        await self.crawl_listing(page, context, listing_url, keyword)\n\n    async def execute(self, rows):\n        async with async_playwright() as pw:\n            browser = await pw.chromium.launch(headless=self.args.headless, args=[\"--disable-blink-features=AutomationControlled\", \"--no-sandbox\"])\n            context = await browser.new_context(\n                user_agent=\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36\",\n                viewport={\"width\": 1920, \"height\": 1080},\n            )\n            await context.add_init_script(\"Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };\")\n            await context.add_init_script(\"Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };\")\n            page = await context.new_page()\n            for _, row in rows.iterrows():\n                if self.stop_for_antibot or (self.args.max_products and len(self.records) >= self.args.max_products):\n                    break\n                await self.run_row(page, context, row)\n            await browser.close()\n\n\ndef read_input(path):\n    sheets = pd.read_excel(path, sheet_name=None)\n    sheets = {k: v.fillna(\"\") for k, v in sheets.items()}\n    input_df = sheets.get(\"Extracted Data\") or next(iter(sheets.values()), pd.DataFrame())\n    allowed = {\"keyword\", \"listing_url\", \"detail_url\"}\n    if not any(str(c).strip().lower() in allowed for c in input_df.columns):\n        input_df = pd.read_excel(path, header=None).fillna(\"\")\n        input_df = input_df.rename(columns={input_df.columns[0]: \"keyword\"})\n    input_df.columns = [str(c).strip().lower() for c in input_df.columns]\n    for col in allowed:\n        if col not in input_df.columns:\n            input_df[col] = \"\"\n    return input_df\n\n\ndef export_results(scraper, output):\n    columns = [\n        \"product_id\", \"product_url\", \"source_listing_url\", \"N\u00ba\", \"Data\", \"Nome\", \"Tipologia\",\n        \"Capacidade\", \"Localiza\u00e7\u00e3o\", \"Certifica\u00e7\u00f5es\", \"RNET n\u00ba\", \"Data de Registo\",\n        \"Tipologia Completa\", \"Morada e C\u00f3digo Postal\", \"Contactos\", \"Marca Comercial\",\n        \"Entidade Exploradora\", \"NIF / NIPC\"\n    ]\n    data = []\n    for record in scraper.records:\n        data.append({col: sanitize_cell_value(record.get(col, \"\")) for col in columns})\n    flags = [{k: sanitize_cell_value(v) for k, v in flag.items()} for flag in scraper.flags]\n    with pd.ExcelWriter(output, engine=\"openpyxl\") as writer:\n        pd.DataFrame(data, columns=columns).to_excel(writer, sheet_name=\"Extracted Data\", index=False)\n        pd.DataFrame(flags, columns=[\"Type\", \"URL\", \"Message\"]).to_excel(writer, sheet_name=\"Flags\", index=False)\n\n\ndef parse_args():\n    parser = argparse.ArgumentParser(description=\"RNET accommodation scraper\")\n    parser.add_argument(\"--input\", default=\"input.xlsx\")\n    parser.add_argument(\"--output\", default=\"output.xlsx\")\n    parser.add_argument(\"--max-products\", type=int, default=None)\n    parser.add_argument(\"--headless\", action=argparse.BooleanOptionalAction, default=True)\n    parser.add_argument(\"--mask-reviews\", action=argparse.BooleanOptionalAction, default=True)\n    return parser.parse_args()\n\n\nasync def main_async(args):\n    rows = read_input(args.input)\n    scraper = Scraper(args)\n    await scraper.execute(rows)\n    log(f\"Crawl Funnel: {scraper.categories_discovered} categories, {scraper.links_discovered} links discovered, {scraper.links_processed} processed, {scraper.records_extracted} extracted.\")\n    if scraper.records_extracted == 0:\n        async with async_playwright() as pw:\n            browser = await pw.chromium.launch(headless=True, args=[\"--no-sandbox\"])\n            page = await browser.new_page()\n            response, html = await scraper.goto(page, TARGET_URL)\n            status = response.status if response else 0\n            title = await page.title()\n            await page.screenshot(path=\"diagnostic_screenshot.png\", full_page=True)\n            log(f\"No product records found: HTTP {status}, Title: '{title}', Screenshot: diagnostic_screenshot.png\")\n            await browser.close()\n        log(\"ERROR: Zero product records were extracted. Aborting.\")\n        export_results(scraper, args.output)\n        sys.exit(1)\n    export_results(scraper, args.output)\n    if scraper.stop_for_antibot:\n        log(\"Stopped cleanly due to anti-bot protection.\")\n\n\ndef main():\n    args = parse_args()\n    asyncio.run(main_async(args))\n\n\nif __name__ == \"__main__\":\n    main()",
+  "requirements_txt": "pandas\nopenpyxl\nbeautifulsoup4\nplaywright\n",
+  "confidence_notes": [
+    "The inspection verified the ASP.NET WebForms search controls, first-page row structure, counter, detail URL pattern, and one detail page, but did not execute pagination.",
+    "The script uses Playwright because the target requires ASP.NET postbacks and browser interaction; no network API was observed.",
+    "Product IDs are consistently derived from the RNET registration number in the detail URL or heading; no SKU, MPN, or canonical slug was observed.",
+    "The target has no product prices, so no price field or price extraction is invented.",
+    "Detail label/value layouts beyond the sampled fields were not fully inspected; address, contacts, brand, operator, and tax-number extraction therefore includes low-confidence/missing-field flags.",
+    "The inspection did not test reviewer accordions or PII masking. The script skips accordion interaction and applies masking only to extracted fields whose key or value indicates review content.",
+    "Input files with recognized keyword/listing_url/detail_url headers are processed normally. If no recognized header is present, the first Excel column is treated as keyword data, including the first row.",
+    "The diagnostic zero-record flow performs a fresh target-page navigation and screenshot after the crawl, which may itself encounter anti-bot protection."
+  ],
+  "total_tool_calls": 12,
+  "action_log": [
+    {
+      "ts": "2026-10-26T14:34:30",
+      "phase": "recon",
+      "tool": "navigate",
+      "input": {
+        "url": "https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx",
+        "wait_until": "domcontentloaded"
+      },
+      "call_number": 1
+    },
+    {
+      "ts": "2026-10-26T14:34:45",
+      "phase": "recon",
+      "tool": "snapshot",
+      "input": {},
+      "call_number": 2
+    },
+    {
+      "ts": "2026-10-26T14:34:48",
+      "phase": "recon",
+      "tool": "run_js",
+      "input": {
+        "script": "({body:document.body.innerText.slice(0,5000), html:document.documentElement.outerHTML.slice(0,12000), forms:[...document.forms].map(f=>({id:f.id,action:f.action,method:f.method})), inputs:[...document.querySelectorAll('input')].map(x=>({id:x.id,name:x.name,type:x.type,placeholder:x.placeholder,value:x.value})), buttons:[...document.querySelectorAll('button,input[type=submit],input[type=button],a')].slice(0,100).map(x=>({tag:x.tagName,id:x.id,text:x.innerText||x.value,href:x.href}))})"
+      },
+      "call_number": 3
+    },
+    {
+      "ts": "2026-10-26T14:34:50",
+      "phase": "recon",
+      "tool": "type_text",
+      "input": {
+        "selector": "#RichWidgets_wt104_block_wtMainContent_wtInput_FiltroTexto",
+        "text": "a"
+      },
+      "call_number": 4
+    },
+    {
+      "ts": "2026-10-26T14:34:52",
+      "phase": "recon",
+      "tool": "click",
+      "input": {
+        "selector": "#RichWidgets_wt104_block_wtMainContent_wt201"
+      },
+      "call_number": 5
+    },
+    {
+      "ts": "2026-10-26T14:34:54",
+      "phase": "recon",
+      "tool": "snapshot",
+      "input": {},
+      "call_number": 6
+    },
+    {
+      "ts": "2026-10-26T14:34:56",
+      "phase": "recon",
+      "tool": "run_js",
+      "input": {
+        "script": "({text:document.body.innerText.slice(-8000), tables:[...document.querySelectorAll('table')].map(t=>({id:t.id,cls:t.className,rows:[...t.rows].slice(0,5).map(r=>[...r.cells].map(c=>c.innerText.trim()))})), links:[...document.querySelectorAll('a')].map(a=>({id:a.id,text:a.innerText.trim(),href:a.href,cls:a.className})).filter(x=>x.text||x.href.includes('Detalhe')).slice(-50)})"
+      },
+      "call_number": 7
+    },
+    {
+      "ts": "2026-10-26T14:34:59",
+      "phase": "recon",
+      "tool": "run_js",
+      "input": {
+        "script": "({rows:[...document.querySelectorAll('#RichWidgets_wt104_block_wtMainContent_wttrRegistos tr')].map(r=>({html:r.outerHTML,text:r.innerText})), counters:[...document.querySelectorAll('*')].filter(x=>/registos|Nenhum registo|Carregando/.test(x.innerText||'')&&x.children.length===0).map(x=>({id:x.id,cls:x.className,text:x.innerText})).slice(-20), controls:[...document.querySelectorAll('input,select,a')].map(x=>({id:x.id,type:x.type,text:x.innerText||x.value,disabled:x.disabled,cls:x.className})).filter(x=>x.text&&/pr\u00f3ximo|seguinte|next|Limpar|Pesquisar/i.test(x.text))})"
+      },
+      "call_number": 8
+    },
+    {
+      "ts": "2026-10-26T14:35:01",
+      "phase": "recon",
+      "tool": "navigate",
+      "input": {
+        "url": "https://rnt.turismodeportugal.pt/RNT/RNET.aspx?nr=13702",
+        "wait_until": "domcontentloaded"
+      },
+      "call_number": 9
+    },
+    {
+      "ts": "2026-10-26T14:35:05",
+      "phase": "recon",
+      "tool": "snapshot",
+      "input": {},
+      "call_number": 10
+    },
+    {
+      "ts": "2026-10-26T14:35:07",
+      "phase": "recon",
+      "tool": "run_js",
+      "input": {
+        "script": "({body:document.body.innerText.slice(0,8000), inputs:[...document.querySelectorAll('input')].map(x=>({id:x.id,type:x.type,value:x.value})), tables:[...document.querySelectorAll('table')].map(t=>({id:t.id,cls:t.className,rows:[...t.rows].slice(0,12).map(r=>[...r.cells].map(c=>c.innerText.trim()))})), links:[...document.querySelectorAll('a')].map(a=>({id:a.id,text:a.innerText.trim(),href:a.href}))})"
+      },
+      "call_number": 11
+    },
+    {
+      "ts": "2026-10-26T14:35:11",
+      "phase": "recon",
+      "tool": "save_items",
+      "input": {
+        "sample_records": [
+          {
+            "N\u00ba": "13702",
+            "Data": "2026-10-20",
+            "Nome": "CASA DO PADRE",
+            "Tipologia": "Casa de campo",
+            "Capacidade": "4",
+            "Localiza\u00e7\u00e3o": "Melga\u00e7o",
+            "Certifica\u00e7\u00f5es": "-",
+            "RNET n\u00ba": "13702",
+            "Data de Registo": "2026-10-20",
+            "Tipologia Completa": "EMPREENDIMENTO DE TURISMO NO ESPA\u00c7O RURAL | CASA DE CAMPO; Turismo de Aldeia",
+            "Morada e C\u00f3digo Postal": "Aldeia de Pontes, 4960-080 CASTRO LABOREIRO, Melga\u00e7o, Viana do Castelo",
+            "Contactos": "939508465; aldeiadepontes@gmail.com; www.aldeiadepontes.com",
+            "Marca Comercial": "Aldeia de Pontes",
+            "Entidade Exploradora": "SARA DOMINGUES",
+            "NIF / NIPC": "123680956"
+          },
+          {
+            "N\u00ba": "13700",
+            "Data": "2026-10-19",
+            "Nome": "AUGUSTA GRAND HOTEL",
+            "Tipologia": "Hotel (3 estrelas)",
+            "Capacidade": "51",
+            "Localiza\u00e7\u00e3o": "Lisboa",
+            "Certifica\u00e7\u00f5es": "-"
+          }
+        ],
+        "schema": [
+          "N\u00ba",
+          "Data",
+          "Nome",
+          "Tipologia",
+          "Capacidade",
+          "Localiza\u00e7\u00e3o",
+          "Certifica\u00e7\u00f5es"
+        ],
+        "item_selector": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tr.TableRecords_OddLine, #RichWidgets_wt104_block_wtMainContent_wttrRegistos tr.TableRecords_EvenLine"
+      },
+      "call_number": 12
+    }
+  ]
+}
+
+CURRENT BROKEN CODE EXCERPT:
+```python
+import argparse
+import asyncio
+import json
+import re
+import sys
+from datetime import datetime
+from urllib.parse import urljoin, urlparse
+
+import pandas as pd
+from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+
+TARGET_URL = "https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx"
+
+
+def log(message):
+    print(f"[{datetime.now().isoformat(timespec='seconds')}] {message}", flush=True)
+
+
+def sanitize_cell_value(val, max_len=32000):
+    if val is None:
+        return ""
+    if isinstance(val, (dict, list)):
+        s = json.dumps(val, ensure_ascii=False)
+    else:
+        s = str(val)
+    if len(s) > max_len:
+        return s[:max_len - 35] + "... [TRUNCATED_EXCEL_LIMIT]"
+    return s
+
+
+def clean(value):
+    if value is None or pd.isna(value) or str(value).strip().lower() in ("", "nan", "none", "null"):
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    if text.lower() in {"nan", "none", "null"}:
+        return ""
+    return text
+
+
+def value_from_row(row, key):
+    if key not in row.index:
+        return ""
+    return clean(row[key])
+
+
+def mask_reviewer_pii(text):
+    if not text:
+        return text
+    text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "***@***.***", text)
+
+    def mask_name(match):
+        parts = match.group(0).split()
+        return " ".join(f"{p[0]}***" if len(p) > 1 else p for p in parts[:-1]) + (f" {parts[-1][0]}." if parts else "")
+
+    return re.sub(r"\b[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ]+\s+[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ]+\b", mask_name, text)
+
+
+def extract_registration(url, text=""):
+    match = re.search(r"[?&]nr=(\d+)", url or "", re.I)
+    if match:
+        return match.group(1)
+    match = re.search(r"RNET\s*n?[ºo]?\s*(\d+)", text or "", re.I)
+    return match.group(1) if match else ""
+
+
+def detect_anti_bot_signals(status, html):
+    markers = (
+        "cloudflare turnstile", "cf-browser-verification", "ray id:", "just a moment...",
+        "datadome", "perimeterx", "px-captcha", "distil networks", "press & hold",
+        "incapsula", "_incapsula_resource", "imperva", "incident id", "kasada",
+        "akamai", "shieldsquare", "security challenge", "pardon our interruption",
+        "potential security risk", "detected automated scripts", "additional security check",
+        "i am human", "hcaptcha", "access denied", "robot or human"
+    )
+    lower = (html or "").lower()
+    matched = [marker for marker in markers if marker in lower]
+    return status in {403, 429} or bool(matched), matched
+
+
+async def dismiss_cookie_banner(page):
+    # No banner was observed during inspection; this is a harmless defensive fallback.
+    for selector in [
+        "button:has-text('Accept')", "button:has-text('Aceitar')",
+        "button:has-text('Agree')", "[id*='cookie' i] button"
+    ]:
+        try:
+            locator = page.locator(selector).first
+            if await locator.is_visible(timeout=500):
+                await locator.click(timeout=1000)
+                return
+        except Exception:
+            pass
+
+
+class Scraper:
+    def __init__(self, args):
+        self.args = args
+        self.flags = []
+        self.records = []
+        self.categories_discovered = 0
+        self.links_discovered = 0
+        self.links_processed = 0
+        self.records_extracted = 0
+        self.stop_for_antibot = False
+
+    def flag(self, kind, url, message):
+        self.flags.append({"Type": kind, "URL": url or "", "Message": str(message)[:1000]})
+
+    async def goto(self, page, url):
+        log(f"Opening {url}")
+        try:
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            await dismiss_cookie_banner(page)
+            html = await page.content()
+            status = response.status if response else 0
+            blocked, markers = detect_anti_bot_signals(status, html)
+            if blocked:
+                title = await page.title()
+                message = f"HTTP {status}; markers: {', '.join(markers)}"
+                self.flag("Blocked by bot protection", url, message)
+                log(f"Blocked by bot protection: {message}")
+                self.stop_for_antibot = True
+            return response, html
+        except Exception as exc:
+            self.flag("Error", url, exc)
+            log(f"Navigation failed for {url}: {exc}")
+            return None, ""
+
+    async def safe_click(self, page, locator, selector, url):
+        try:
+            await locator.click(timeout=10000)
+            return True
+        except Exception as exc:
+            log(f"Click blocked on locator '{selector}': {exc}")
+            self.flag("Click Intercepted", url, f"Element {selector} blocked: {str(exc)[:200]}")
+            try:
+                await page.keyboard.press("Escape")
+                await locator.click(timeout=3000)
+                return True
+            except Exception:
+                try:
+                    await locator.evaluate("el => el.click()")
+                    return True
+                except Exception as fallback_exc:
+                    log(f"Fallback click failed on '{selector}': {fallback_exc}")
+                    return False
+
+    async def wait_results(self, page):
+        try:
+            await page.wait_for_selector("#RichWidgets_wt104_block_wtMainContent_wttrRegistos", timeout=30000)
+            await page.wait_for_selector(".Counter_Message", timeout=30000)
+        except PlaywrightTimeoutError as exc:
+            self.flag("Missing field", page.url, f"Results table/counter did not load: {exc}")
+
+    async def parse_listing_page(self, page, source_url):
+        soup = BeautifulSoup(await page.content(), "html.parser")
+        table = soup.select_one("#RichWidgets_wt104_block_wtMainContent_wttrRegistos")
+        if not table:
+            return []
+        rows = table.select("tr.TableRecords_OddLine, tr.TableRecords_EvenLine")
+        result = []
+        for row in rows:
+            cells = row.find_all("td")
+            values = [c.get_text(" ", strip=True).replace("\xa0", " ") for c in cells]
+            link = row.select_one("a[id$='_wt190'][href*='RNET.aspx?nr=']")
+            if not link or len(values) < 6:
+                self.flag("Low-confidence extraction", source_url, "Listing row lacked expected detail link or cells")
+                continue
+            detail_url = urljoin(source_url, link.get("href", ""))
+            registration = extract_registration(detail_url, values[0])
+            item = {
+                "product_id": registration,
+                "product_url": detail_url,
+                "source_listing_url": source_url,
+                "Nº": values[0] if values else registration,
+                "Data": values[1] if len(values) > 1 else "",
+                "Nome": values[2] if len(values) > 2 else "",
+                "Tipologia": values[3] if len(values) > 3 else "",
+                "Capacidade": values[4] 
+```
+
+YOUR DIAGNOSTIC MISSIONS (USE BROWSER TOOLS):
+1. Navigate to TARGET URL (https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx) using `browser_navigate`.
+2. Inspect the live rendered DOM with `browser_snapshot`:
+   - Check if the page loaded normally or if an HTTP error (403, 404, 500) occurred.
+   - Detect and dismiss any cookie-consent banners, popups, or modal overlays that may be intercepting clicks. Record how they were dismissed!
+   - Check for anti-bot challenges (Cloudflare, CAPTCHA, WAF). If present, record the anti-bot marker and halt.
+3. Diagnose the selectors from the broken code:
+   - Why did the script fail or extract 0 rows? Did the listing container selector fail to match? Did detail link selectors break?
+   - If the script failed on prices: locate the product's primary pricing container / buy box. Verify currency-anchored price selectors ($xx.xx). Ensure prices are NOT being read from titles or banners!
+   - If the script failed on missing fields: find where title, brand, category, specs, or images live in the live DOM.
+   - If the script required clicking tabs/accordions: verify the exact locators and whether click interception occurred.
+4. Check network requests with `browser_network_requests`:
+   - Is there a clean JSON/XHR endpoint that provides the required data directly?
+5. Verify working selectors by observing real sample values for all required columns.
+
+Return your final answer as a single JSON object with exactly these keys:
+  "root_cause"               - clear diagnosis of why the test run failed or yielded 0 rows
+  "page_type"                - "listing" | "detail" | "both"
+  "cookie_banner"            - what overlay/banner was present and how it was dismissed
+  "working_listing_selectors"- verified selectors for product cards and detail page links
+  "working_detail_selectors" - verified selectors on the detail page for required fields
+  "working_price_selector"   - verified selector scoped strictly inside the pricing / buy box container
+  "search_flow"              - verified search or filter flow, if tested
+  "navigation_path"          - verified navigation steps from listing to item details
+  "network_api"              - clean JSON API endpoint if observed, or "none observed"
+  "sample_extracted_fields"  - dictionary of real sample values observed on the live page
+  "diagnostic_notes"         - concise list of actionable recommendations for the codegen repair phase
+  "confidence_notes"         - list of strings for anything unverified or uncertain
+
+CRITICAL FORMATTING RULE: your final message must be ONLY that JSON object -
+no markdown code fences, no explanation before or after it, no prose outside the JSON. It must parse cleanly with Python's json.loads().

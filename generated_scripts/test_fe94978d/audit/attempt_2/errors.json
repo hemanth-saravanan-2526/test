@@ -1,0 +1,6 @@
+{
+  "exit_code": 1,
+  "error_summary": "  File \"C:\\Users\\Mob260005997\\Scraper_studio\\generated_scripts\\test_fe94978d\\generated_scraper.py\", line 147\r\n    status = page.request? if False else None\r\n                         ^\r\nSyntaxError: invalid syntax\r\n",
+  "stderr_tail": "  File \"C:\\Users\\Mob260005997\\Scraper_studio\\generated_scripts\\test_fe94978d\\generated_scraper.py\", line 147\r\n    status = page.request? if False else None\r\n                         ^\r\nSyntaxError: invalid syntax\r\n",
+  "stdout_tail": ""
+}

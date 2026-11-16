@@ -1,0 +1,6 @@
+{
+  "exit_code": 1,
+  "error_summary": "[2026-10-27T14:51:57] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\r\n[2026-10-27T14:52:21] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\r\n[2026-10-27T14:52:42] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\r\n[2026-10-27T14:53:04] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\r\n[2026-10-27T14:53:25] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\r\n[2026-10-27T14:53:46] Crawl Funnel: 5 categories, 0 links discovered, 0 processed, 0 extracted.\r\n[2026-10-27T14:53:46] ERROR: Zero product records were extracted. Aborting.\r\n",
+  "stderr_tail": "",
+  "stdout_tail": "[2026-10-27T14:51:57] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\r\n[2026-10-27T14:52:21] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\r\n[2026-10-27T14:52:42] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\r\n[2026-10-27T14:53:04] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\r\n[2026-10-27T14:53:25] Opening https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx\r\n[2026-10-27T14:53:46] Crawl Funnel: 5 categories, 0 links discovered, 0 processed, 0 extracted.\r\n[2026-10-27T14:53:46] ERROR: Zero product records were extracted. Aborting.\r\n"
+}

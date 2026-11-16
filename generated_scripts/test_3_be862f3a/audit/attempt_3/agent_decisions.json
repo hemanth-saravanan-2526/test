@@ -1,0 +1,83 @@
+{
+  "root_cause": "The live site is healthy and returns HTTP 200 results. The test failed before extraction because the generated scraper called Playwright async Page.wait_for_function() with the JavaScript argument list as a positional argument, which is incompatible with the installed Playwright API and raised TypeError. Zero extracted rows were therefore a consequence of the unhandled API error, not blocking or invalid primary selectors.",
+  "diagnostic_findings": {
+    "root_cause": "The live site is healthy and returns HTTP 200 results. The test failed before extraction because the generated scraper called Playwright async Page.wait_for_function() with the JavaScript argument list as a positional argument, which is incompatible with the installed Playwright API and raised TypeError. Zero extracted rows were therefore a consequence of the unhandled API error, not blocking or invalid primary selectors.",
+    "page_type": "both",
+    "cookie_banner": "No cookie banner, modal overlay, or click-intercepting popup was present; no dismissal was required. Search and result clicks succeeded natively.",
+    "working_listing_selectors": {
+      "table": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos",
+      "valid_rows": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tr:has(td)",
+      "detail_links": "#RichWidgets_wt104_block_wtMainContent_wttrRegistos tr a[href*='RNET.aspx?nr=']",
+      "next_page": ".ListNavigation_Next",
+      "search_input": "#RichWidgets_wt104_block_wtMainContent_wtInput_FiltroTexto",
+      "search_button": "#RichWidgets_wt104_block_wtMainContent_wt201",
+      "clear_button": "#RichWidgets_wt104_block_wtMainContent_wt22",
+      "verified_sample_count": 10
+    },
+    "working_detail_selectors": {
+      "detail_table": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento",
+      "operating_table": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowFuncionamento",
+      "rnet_heading": "body text matching 'RNET n\u00ba'",
+      "registration_date": "body text matching 'Registado em'",
+      "classification": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr",
+      "address": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr",
+      "contacts": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr",
+      "brand": "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento tr",
+      "operator": "body text/table row matching 'Entidade exploradora'",
+      "tax_number": "body text/table row matching 'Entidade exploradora'"
+    },
+    "working_price_selector": "none; this is a registry/accommodation site and no product pricing or buy box exists",
+    "search_flow": "Load https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx, clear with #RichWidgets_wt104_block_wtMainContent_wt22 or fill the input with an empty string, fill #RichWidgets_wt104_block_wtMainContent_wtInput_FiltroTexto with the keyword, click #RichWidgets_wt104_block_wtMainContent_wt201, then wait for #RichWidgets_wt104_block_wtMainContent_wttrRegistos tr:has(td) and network idle. Keyword 'a' produced 10 valid rows on the first page.",
+    "navigation_path": "From each result row, extract the absolute URL from a[href*='RNET.aspx?nr=']; open it in a separate tab/context page; extract the detail and operating tables; close the tab; return to the listing page. Pagination is available through the visible, enabled .ListNavigation_Next link and numbered page links.",
+    "network_api": "none observed; the site uses a server-rendered/WebForms-style page with AJAX/postback state rather than a clean JSON endpoint",
+    "sample_extracted_fields": {
+      "listing": {
+        "N\u00ba": "13702",
+        "Data": "2026-10-20",
+        "Nome": "CASA DO PADRE",
+        "Tipologia": "Casa de campo",
+        "Capacidade": "4",
+        "Localiza\u00e7\u00e3o": "Melga\u00e7o",
+        "Certifica\u00e7\u00f5es": "-",
+        "detail_url": "https://rnt.turismodeportugal.pt/RNT/RNET.aspx?nr=13702"
+      },
+      "detail": {
+        "RNET n\u00ba": "13702",
+        "Data de Registo": "2026-10-20",
+        "Tipologia Completa": "EMPREENDIMENTO DE TURISMO NO ESPA\u00c7O RURAL | CASA DE CAMPO; Turismo de Aldeia",
+        "Morada e C\u00f3digo Postal": "Aldeia de Pontes; 4960-080 CASTRO LABOREIRO; Melga\u00e7o, Viana do Castelo",
+        "Contactos": "939508465; aldeiadepontes@gmail.com; www.aldeiadepontes.com",
+        "Marca Comercial": "Aldeia de Pontes",
+        "Entidade Exploradora": "SARA DOMINGUES",
+        "NIF / NIPC": "123680956"
+      }
+    },
+    "diagnostic_notes": [
+      "Replace the invalid wait_for_function call with a supported implementation, such as a callable polling function or a properly keyword-supplied argument, and retain a timeout fallback.",
+      "Do not classify HTTP status 0 from a synthetic diagnostic log as a site HTTP failure; the initial navigation returned HTTP 200.",
+      "Use only rows containing a[href*='RNET.aspx?nr=']; nested spacer rows inside the Tipologia cells must be ignored because they lack the detail link.",
+      "The listing table has eight columns including a detail column; header-based extraction is safer than a blind positional fallback.",
+      "Normalize non-breaking spaces and whitespace because the site renders them in registration numbers, addresses, and labels.",
+      "Wait for both result rows and the counter/table update after search and pagination; compare table text or a stable row signature before continuing.",
+      "Detail content is label/value text in the two verified tables, while the RNET number and registration date appear in page-level text.",
+      "No price selector should be generated or used for this target.",
+      "The required Excel output should preserve both Extracted Data and Flags sheets."
+    ],
+    "confidence_notes": [
+      "Pagination was observed on the first results page through .ListNavigation_Next but a next-page click was not executed in this inspection.",
+      "The exact DOM node for the page-level RNET heading and registration date was not isolated beyond verified text matching.",
+      "Detail fields are rendered in table rows with varying nested markup; label-aware extraction should be used rather than fixed cell indexes.",
+      "The sample operator name and contact details are real rendered values; reviewer accordions were not present or expanded.",
+      "No clean JSON/XHR API was exposed by the inspection tools."
+    ]
+  },
+  "confidence_notes": [
+    "Repaired the incompatible Playwright wait_for_function usage by replacing it with supported asynchronous polling of the verified results table signature.",
+    "Uses the live-verified listing, search, clear, detail-table, operating-table, and pagination selectors.",
+    "Processes only listing rows containing href*='RNET.aspx?nr=' and opens each detail page in a separate browser tab.",
+    "Preserves the existing schema fields including Title, Price, Description, Modules, Categories, and Images; this registry has no price buy-box, so Price remains empty rather than extracting unrelated numbers.",
+    "Preserves existing custom Excel sheets while replacing only Extracted Data and Flags.",
+    "Reads the headerless input workbook with header=None, including the first row as valid data.",
+    "Fails fast on HTTP 403/429 or WAF challenge markers and logs the required crawl funnel and diagnostic screenshot on zero records."
+  ]
+}

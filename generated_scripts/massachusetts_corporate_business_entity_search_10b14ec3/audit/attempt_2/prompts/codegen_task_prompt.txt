@@ -1,0 +1,853 @@
+You are repairing a Python web scraper that failed or produced zero records during an automated test run.
+A live diagnostic inspection session was just conducted using browser tools to verify the live website state.
+Your task is to synthesize a complete, fully repaired, regression-proof scraper.
+
+CRITICAL REGRESSION INVARIANTS:
+1. DO NOT DROP PREVIOUSLY WORKING FIELDS. You MUST preserve all existing extraction fields (e.g. Title, Price, Description, Modules, Categories, Images). Never blank out or drop Title, Price, or custom modules!
+2. MULTI-SHEET PRESERVATION: You MUST preserve all existing Excel sheets (
+- EXISTING SHEETS: ['Extracted Data', 'Flags']). Never drop custom sheets like 'Recommendations' or 'Variants'!
+3. CANONICAL PRODUCT IDENTIFIERS: Output 'product_id', 'product_url', and 'source_listing_url'. Do not duplicate 'Source URL'.
+4. STRICT PRICE SCOPING: Extract prices only from within product buy-box / pricing elements. NEVER extract digits from product titles (e.g. '250 North American Birds Sound Book' is NOT price 250!). Anchor to currency symbols ($xx.xx).
+5. EXCEL 32K LIMIT: Include and use `sanitize_cell_value(val, max_len=32000)` on all output values before Excel export.
+6. CRAWL FUNNEL & FAIL LOUDLY: Log crawl funnel metrics. If 0 records are extracted, exit with sys.exit(1) and take a diagnostic screenshot.
+7. CLICK TELEMETRY: Wrap clicks in try/except, log real errors, and provide overlay dismissal / JS evaluate fallback.
+8. BOT PROTECTION: Classify 403 or WAF challenge pages as 'Blocked by bot protection' and halt immediately without retrying.
+
+TARGET: https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSearch.aspx
+RULES:
+- Search rules: 1. Ensure the 'Entity Name' radio button is selected.
+2. Type the keyword into the 'Enter name:' input field.
+3. Set the 'Search type' dropdown to 'Begins with'.
+4. Click the 'Search Corporations' submit button.
+5. Wait for the results page (CorpSearchResults.aspx) to load.
+- Filter rules: none specified
+- Navigation rules: 1. Results are presented in an ASP.NET table grid across multiple pages (e.g. 33 records across 2 pages).
+2. Extract all rows from the current table page, clicking each Entity Name link to visit its detail page (or capture directly from the results grid).
+3. For pagination, handle the numeric page links ('1', '2', 'Next') at the bottom of the table using Playwright, waiting for network idle after each page navigation.
+4. Respect the --max-products cap (e.g., default 10 for test run).
+- Extraction rules: Extract the following fields for each corporate entity:
+- Entity Name
+- ID Number
+- Entity Type
+- Principal Office Address
+- Current Status
+- Entity Detail URL
+Mask reviewer PII and skip review accordions.
+
+FAILED TEST RUN TELEMETRY:
+- Exit Code: 1
+- Extracted Rows: 0
+- Failure Summary: [2026-10-20T09:37:23.472350+00:00] Crawl Funnel: 1 categories, 0 links discovered, 0 processed, 0 extracted.
+[2026-10-20T09:37:23.472350+00:00] No product records found: HTTP 200, Title: '', Screenshot: diagnostic_screenshot.png
+[2026-10-20T09:37:23.472350+00:00] ERROR: Zero product records were extracted. Aborting.
+
+
+- Traceback / Error:
+```
+[2026-10-20T09:37:23.472350+00:00] Crawl Funnel: 1 categories, 0 links discovered, 0 processed, 0 extracted.
+[2026-10-20T09:37:23.472350+00:00] No product records found: HTTP 200, Title: '', Screenshot: diagnostic_screenshot.png
+[2026-10-20T09:37:23.472350+00:00] ERROR: Zero product records were extracted. Aborting.
+
+```
+- Standard Output:
+```
+[2026-10-20T09:37:23.472350+00:00] Crawl Funnel: 1 categories, 0 links discovered, 0 processed, 0 extracted.
+[2026-10-20T09:37:23.472350+00:00] No product records found: HTTP 200, Title: '', Screenshot: diagnostic_screenshot.png
+[2026-10-20T09:37:23.472350+00:00] ERROR: Zero product records were extracted. Aborting.
+
+```
+
+LIVE DIAGNOSTIC FINDINGS (VERIFIED ON LIVE DOM VIA BROWSER TOOLS):
+{
+  "root_cause": "The live site is an ASP.NET postback application. The search results do load successfully, but the scraper's extraction logic is brittle: it assumes detail fields are label/value table rows with labels such as 'Entity Name' and 'Current Status', while the live detail page uses text such as 'Summary for:', 'Entity type:', and 'Identification Number:'. The live status field is not present in the inspected summary. The prior zero-row failure was therefore not caused by HTTP blocking or a missing results grid; it indicates the test execution did not successfully complete the ASP.NET search/postback or used selectors/code from a different page state. The current live selectors produce 25 first-page rows and a page-2 link.",
+  "page_type": "both",
+  "cookie_banner": "No cookie-consent banner, popup, modal overlay, CAPTCHA, Cloudflare challenge, or WAF challenge was observed. No dismissal was required.",
+  "working_listing_selectors": {
+    "search_page": "#MainContent_rdoByEntityName",
+    "entity_name_input": "#MainContent_txtEntityName",
+    "search_type_dropdown": "#MainContent_ddBeginsWithEntityName",
+    "search_submit": "#MainContent_btnSearch",
+    "results_grid": "#MainContent_SearchControl_grdSearchResultsEntity",
+    "result_rows": "#MainContent_SearchControl_grdSearchResultsEntity tr.GridRow, #MainContent_SearchControl_grdSearchResultsEntity tr.GridAltRow",
+    "result_detail_links": "#MainContent_SearchControl_grdSearchResultsEntity a.link[href*='CorpSummary.aspx']",
+    "pagination_page_2": "#MainContent_SearchControl_grdSearchResultsEntity a[href*=\"Page$2\"]"
+  },
+  "working_detail_selectors": {
+    "summary_container": "table.center",
+    "entity_name_container": "#MainContent_tblEntity",
+    "entity_name_text": "#MainContent_tblEntity",
+    "entity_type_container": "#MainContent_tblEntityType",
+    "id_number_container": "#MainContent_tblIDNumber",
+    "principal_office_container": "#MainContent_tblPrincipleOffice",
+    "principal_office_address_rows": "#MainContent_tblPrincipleOffice tr",
+    "status": "No verified dedicated status selector; 'Current Status' was not visible on the inspected detail page",
+    "detail_url_pattern": "/CorpWeb/CorpSearch/CorpSummary.aspx?sysvalue=<opaque-value>"
+  },
+  "working_price_selector": "none; this is a corporate registry and no product pricing or buy-box element exists",
+  "search_flow": {
+    "verified": true,
+    "steps": [
+      "Navigate to https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSearch.aspx",
+      "Ensure #MainContent_rdoByEntityName is checked",
+      "Fill #MainContent_txtEntityName with 'mobius'",
+      "Select option value 'B' in #MainContent_ddBeginsWithEntityName",
+      "Click #MainContent_btnSearch",
+      "Wait for #MainContent_SearchControl_grdSearchResultsEntity",
+      "Results navigate to https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSearchResults.aspx"
+    ],
+    "observed_result": "25 result rows on page 1, with a numeric page-2 postback link"
+  },
+  "navigation_path": [
+    "Search form is initially at CorpSearch.aspx",
+    "Search submission is an ASP.NET postback and changes the URL to CorpSearchResults.aspx",
+    "Extract rows matching GridRow/GridAltRow within #MainContent_SearchControl_grdSearchResultsEntity",
+    "Open each row's a.link[href*='CorpSummary.aspx']",
+    "Detail pages use CorpSummary.aspx?sysvalue=...",
+    "Pagination uses javascript:__doPostBack('ctl00$MainContent$SearchControl$grdSearchResultsEntity','Page$2') and should be followed by waiting for the grid/page content to update"
+  ],
+  "network_api": "No clean JSON endpoint for corporation data was observed. Search and pagination are ASP.NET form/postback operations. The observed JSON requests to the obfuscated Cut-to-treatheir-Gorgesseruant-Tyrantiencht endpoint appear to be site security/telemetry tokens, not entity data. Swiftype endpoints were unrelated site-search assets.",
+  "sample_extracted_fields": {
+    "listing_entity_name": "MOBIUS BIOMEDICAL INC.",
+    "listing_id_number": "001277200",
+    "listing_address": "600 SUFFOLK ST., 2ND FLOOR LOWELL, MA 01854 USA",
+    "detail_entity_name": "ENQUYST TECHNOLOGIES INC.",
+    "detail_id_number": "001277200",
+    "detail_entity_type": "Foreign Corporation",
+    "detail_principal_office_address": "600 SUFFOLK ST., 2ND FLOOR LOWELL, MA 01854 USA",
+    "detail_url": "https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSummary.aspx?sysvalue=I1J5plpq33x0EaRHKSdKIK7EMLsnxfnZmAtqWM9o7e4-",
+    "detail_name_change_note": "The name was changed from: MOBIUS BIOMEDICAL INC. on 02-22-2023",
+    "current_status": ""
+  },
+  "diagnostic_notes": [
+    "Do not rely on the requested CorpSearchResults.aspx URL before submission; the initial form is CorpSearch.aspx and the results URL appears only after the postback.",
+    "Wait explicitly for #MainContent_SearchControl_grdSearchResultsEntity after clicking the submit input.",
+    "Use the broader verified detail-link selector a[href*='CorpSummary.aspx']; the class-qualified selector is valid for observed rows but unnecessarily restrictive.",
+    "The first result demonstrates that the searched former name can differ from the current detail summary name; preserve both only if needed, and use the listing name for the requested Entity Name if that is the intended search-result value.",
+    "Parse detail values from the actual text patterns: 'Summary for:', 'Entity type:', 'Identification Number:', and the Address/City rows under #MainContent_tblPrincipleOffice.",
+    "The existing table_field fallback that expects the first cell to equal 'Entity Name' will fail for #MainContent_tblEntity because its content is 'Summary for: ENQUYST TECHNOLOGIES INC.'.",
+    "Current Status is not exposed in the inspected summary DOM; emit an empty value plus a missing-field flag rather than inventing one.",
+    "Pagination must target numeric postback anchors such as href containing Page$2; do not look for a literal Next link because only '2' was observed.",
+    "The results page contains 25 rows for mobius, not 33 on the observed run; total result counts may vary.",
+    "No price extraction is applicable.",
+    "Registered-agent and officer tables contain PII and should remain excluded or masked as requested."
+  ],
+  "confidence_notes": [
+    "Page 2 was not opened during this inspection, so its exact row count and final pagination state remain unverified.",
+    "The observed detail page was the first result and its current entity name differed from the result-grid name because the entity had a recorded name change.",
+    "No dedicated Current Status element was visible in the inspected detail page; status may be represented elsewhere for some entity types or may be unavailable.",
+    "The browser snapshot's discovered obfuscated JSON requests are not confirmed as corporation-data APIs and should not be used as a data source."
+  ]
+}
+
+PRIOR INSPECTION FINDINGS:
+{
+  "generated_code": "import argparse\nimport asyncio\nimport hashlib\nimport json\nimport re\nimport sys\nfrom datetime import datetime, timezone\nfrom urllib.parse import parse_qs, urljoin, urlparse\n\nimport pandas as pd\nimport requests\nfrom bs4 import BeautifulSoup\nfrom playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError\n\nTARGET_URL = \"https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSearch.aspx\"\nBASE_URL = \"https://corp.sec.state.ma.us/\"\n\n\ndef log(message):\n    print(f\"[{datetime.now(timezone.utc).isoformat()}] {message}\", flush=True)\n\n\ndef sanitize_cell_value(val, max_len=32000):\n    if val is None:\n        return \"\"\n    if isinstance(val, (dict, list)):\n        s = json.dumps(val, ensure_ascii=False)\n    else:\n        s = str(val)\n    if len(s) > max_len:\n        return s[:max_len - 35] + \"... [TRUNCATED_EXCEL_LIMIT]\"\n    return s\n\n\ndef clean(value):\n    if value is None or pd.isna(value) or str(value).strip().lower() in (\"\", \"nan\", \"none\", \"null\"):\n        return \"\"\n    try:\n        if pd.isna(value):\n            return \"\"\n    except (TypeError, ValueError):\n        pass\n    text = str(value).strip()\n    if text.lower() in {\"nan\", \"none\", \"null\"}:\n        return \"\"\n    return text\n\n\ndef value_from_row(row, column):\n    if column not in row:\n        return \"\"\n    return clean(row[column])\n\n\ndef mask_reviewer_pii(text):\n    text = re.sub(r\"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\", \"***@***.***\", text)\n\n    def mask_name(match):\n        words = match.group(0).split()\n        return \" \".join(f\"{word[0]}***\" if i == 0 else f\"{word[0]}.\" for i, word in enumerate(words))\n\n    return re.sub(r\"\\b[A-Z][a-z]+\\s+[A-Z][a-z]+\\b\", mask_name, text)\n\n\ndef canonical_product_id(url):\n    parsed = urlparse(url)\n    query_value = parse_qs(parsed.query).get(\"sysvalue\", [\"\"])[0].strip()\n    if query_value:\n        return query_value\n    match = re.search(r\"/([^/?#]+?)(?:\\.aspx)?(?:[/?#]|$)\", parsed.path, re.I)\n    if match and match.group(1).lower() not in {\"corpsummary\", \"corpsearch\"}:\n        return match.group(1)\n    return hashlib.sha256(url.encode(\"utf-8\")).hexdigest()[:24]\n\n\ndef detect_anti_bot_signals(status, html):\n    markers = (\n        \"cloudflare turnstile\",\n        \"just a moment...\",\n        \"datadome\",\n        \"perimeterx\",\n        \"verify you are human\",\n    )\n    lowered = (html or \"\").lower()\n    if status in {403, 429} or any(marker in lowered for marker in markers):\n        return \"Blocked by bot protection\"\n    return \"\"\n\n\ndef static_status(url):\n    try:\n        response = requests.get(\n            url,\n            headers={\"User-Agent\": \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36\"},\n            timeout=30,\n        )\n        return response.status_code, response.text\n    except requests.RequestException as exc:\n        log(f\"HTTP preflight failed for {url}: {exc}\")\n        return 0, \"\"\n\n\ndef table_field(soup, selector, labels):\n    table = soup.select_one(selector)\n    if not table:\n        return \"\"\n    wanted = {label.lower().rstrip(\":\") for label in labels}\n    for row in table.select(\"tr\"):\n        cells = [\" \".join(cell.stripped_strings) for cell in row.select(\"th, td\")]\n        cells = [re.sub(r\"\\s+\", \" \", cell).strip() for cell in cells if cell.strip()]\n        if len(cells) >= 2:\n            label = cells[0].lower().rstrip(\":\")\n            if label in wanted:\n                return \" \".join(cells[1:]).strip()\n    return \"\"\n\n\ndef first_table_value(soup, selector):\n    table = soup.select_one(selector)\n    if not table:\n        return \"\"\n    text = \" \".join(table.stripped_strings)\n    return re.sub(r\"\\s+\", \" \", text).strip()\n\n\ndef extract_detail_html(html, url, source_listing_url, mask_reviews):\n    soup = BeautifulSoup(html, \"html.parser\")\n    entity_name = table_field(soup, \"#MainContent_tblEntity\", [\"Entity Name\", \"Name\"])\n    if not entity_name:\n        entity_name = first_table_value(soup, \"#MainContent_tblEntity\")\n    entity_type = table_field(soup, \"#MainContent_tblEntityType\", [\"Entity Type\", \"Type\"])\n    if not entity_type:\n        entity_type = first_table_value(soup, \"#MainContent_tblEntityType\")\n    id_number = table_field(soup, \"#MainContent_tblIDNumber\", [\"ID Number\", \"Identification Number\"])\n    if not id_number:\n        id_number = first_table_value(soup, \"#MainContent_tblIDNumber\")\n    office = table_field(soup, \"#MainContent_tblPrincipleOffice\", [\"Principal Office\", \"Principal Office Address\", \"Address\"])\n    if not office:\n        office = first_table_value(soup, \"#MainContent_tblPrincipleOffice\")\n    status = table_field(soup, \"#MainContent_tblStatus\", [\"Current Status\", \"Status\"])\n    if mask_reviews:\n        entity_name = mask_reviewer_pii(entity_name)\n        entity_type = mask_reviewer_pii(entity_type)\n        office = mask_reviewer_pii(office)\n    record = {\n        \"product_id\": canonical_product_id(url),\n        \"product_url\": url,\n        \"source_listing_url\": source_listing_url or \"DIRECT_INPUT\",\n        \"Entity Name\": entity_name,\n        \"ID Number\": id_number,\n        \"Entity Type\": entity_type,\n        \"Principal Office Address\": office,\n        \"Current Status\": status,\n        \"Entity Detail URL\": url,\n    }\n    return record\n\n\nasync def dismiss_cookie_banner(page):\n    selectors = [\n        \"button:has-text('Accept')\",\n        \"button:has-text('Allow all')\",\n        \"button:has-text('I agree')\",\n        \"[id*='cookie' i] button\",\n        \"[class*='cookie' i] button\",\n    ]\n    for selector in selectors:\n        locator = page.locator(selector).first\n        try:\n            if await locator.is_visible(timeout=500):\n                await locator.click(timeout=1500)\n                return\n        except Exception:\n            continue\n\n\nasync def safe_click(page, locator, selector, flags, url):\n    try:\n        await locator.click(timeout=5000)\n        return True\n    except Exception as exc:\n        log(f\"Click blocked on locator '{selector}': {exc}\")\n        flags.append({\"Type\": \"Click Intercepted\", \"URL\": url, \"Message\": f\"Element {selector} blocked: {str(exc)[:200]}\"})\n        try:\n            await page.keyboard.press(\"Escape\")\n            await locator.click(timeout=2000)\n            return True\n        except Exception:\n            try:\n                await locator.evaluate(\"el => el.click()\")\n                return True\n            except Exception as fallback_exc:\n                log(f\"Click fallback failed on locator '{selector}': {fallback_exc}\")\n                return False\n\n\nasync def get_page_detail(page, url, source_listing_url, mask_reviews, flags):\n    response = await page.goto(url, wait_until=\"domcontentloaded\", timeout=45000)\n    await dismiss_cookie_banner(page)\n    html = await page.content()\n    status = response.status if response else 0\n    blocked = detect_anti_bot_signals(status, html)\n    if blocked:\n        flags.append({\"Type\": blocked, \"URL\": url, \"Message\": blocked})\n        return None, True\n    return extract_detail_html(html, page.url, source_listing_url, mask_reviews), False\n\n\nasync def extract_listing_page(page, listing_url, keyword, max_remaining, mask_reviews, flags):\n    response = await page.goto(listing_url, wait_until=\"domcontentloaded\", timeout=45000)\n    await dismiss_cookie_banner(page)\n    initial_html = await page.content()\n    status = response.status if response else 0\n    blocked = detect_anti_bot_signals(status, initial_html)\n    if blocked:\n        flags.append({\"Type\": blocked, \"URL\": listing_url, \"Message\": blocked})\n        return [], True\n    await page.wait_for_selector(\"#MainContent_rdoByEntityName\", timeout=15000)\n    radio = page.locator(\"#MainContent_rdoByEntityName\")\n    if not await radio.is_checked():\n        await radio.check()\n    if keyword:\n        await page.locator(\"#MainContent_txtEntityName\").fill(keyword)\n    await page.locator(\"#MainContent_ddBeginsWithEntityName\").select_option(\"B\")\n    submit = page.locator(\"#MainContent_btnSearch\")\n    if not await safe_click(page, submit, \"#MainContent_btnSearch\", flags, page.url):\n        return [], False\n    try:\n        await page.wait_for_selector(\"#MainContent_SearchControl_grdSearchResultsEntity\", timeout=30000)\n    except PlaywrightTimeoutError:\n        flags.append({\"Type\": \"Error\", \"URL\": page.url, \"Message\": \"Results grid did not load after search\"})\n        return [], False\n\n    records = []\n    seen_pages = set()\n    while len(records) < max_remaining:\n        grid = page.locator(\"#MainContent_SearchControl_grdSearchResultsEntity\")\n        rows = grid.locator(\"tr.GridRow, tr.GridAltRow\")\n        row_count = await rows.count()\n        page_signature = await grid.inner_text()\n        if page_signature in seen_pages:\n            break\n        seen_pages.add(page_signature)\n        links = []\n        for i in range(row_count):\n            row = rows.nth(i)\n            link = row.locator(\"th.RowHeader a.link, a[href*='CorpSummary.aspx']\").first\n            if await link.count() == 0:\n                continue\n            href = await link.get_attribute(\"href\")\n            name = (await link.inner_text()).strip()\n            cells = row.locator(\"td\")\n            id_number = (await cells.nth(0).inner_text()).strip() if await cells.count() > 0 else \"\"\n            office = (await cells.nth(2).inner_text()).strip() if await cells.count() > 2 else \"\"\n            if href:\n                links.append((urljoin(page.url, href), name, id_number, office))\n        detail_page = await page.context.new_page()\n        try:\n            for detail_url, grid_name, grid_id, grid_office in links:\n                if len(records) >= max_remaining:\n                    break\n                record, halted = await get_page_detail(detail_page, detail_url, listing_url, mask_reviews, flags)\n                if halted:\n                    return records, True\n                if record:\n                    if not record[\"Entity Name\"]:\n                        record[\"Entity Name\"] = grid_name\n                    if not record[\"ID Number\"]:\n                        record[\"ID Number\"] = grid_id\n                    if not record[\"Principal Office Address\"]:\n                        record[\"Principal Office Address\"] = office if (office := grid_office) else \"\"\n                    records.append(record)\n        finally:\n            await detail_page.close()\n        if len(records) >= max_remaining:\n            break\n        next_link = None\n        anchors = page.locator(\"#MainContent_SearchControl_grdSearchResultsEntity a\")\n        for i in range(await anchors.count()):\n            anchor = anchors.nth(i)\n            text = (await anchor.inner_text()).strip()\n            if text.lower() == \"next\" or text.isdigit() and text not in {\"1\"}:\n                next_link = anchor\n                break\n        if next_link is None:\n            break\n        if not await safe_click(page, next_link, \"#MainContent_SearchControl_grdSearchResultsEntity a\", flags, page.url):\n            break\n        try:\n            await page.wait_for_load_state(\"networkidle\", timeout=30000)\n        except PlaywrightTimeoutError:\n            pass\n    return records, False\n\n\nasync def run(args, input_df):\n    flags = []\n    records = []\n    rows = input_df.to_dict(\"records\")\n    categories_discovered = len(rows)\n    async with async_playwright() as playwright:\n        browser = await playwright.chromium.launch(\n            headless=args.headless,\n            args=[\"--disable-blink-features=AutomationControlled\"],\n        )\n        context = await browser.new_context(user_agent=\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36\")\n        page = await context.new_page()\n        halted = False\n        for row in rows:\n            if args.max_products is not None and len(records) >= args.max_products:\n                break\n            detail_url = value_from_row(row, \"detail_url\")\n            listing_url = value_from_row(row, \"listing_url\") or TARGET_URL\n            keyword = value_from_row(row, \"keyword\")\n            remaining = args.max_products - len(records) if args.max_products is not None else 10**9\n            if detail_url:\n                detail_page = await context.new_page()\n                try:\n                    record, halted = await get_page_detail(detail_page, urljoin(BASE_URL, detail_url), \"DIRECT_INPUT\", args.mask_reviews, flags)\n                    if record:\n                        records.append(record)\n                finally:\n                    await detail_page.close()\n            else:\n                found, halted = await extract_listing_page(page, listing_url, keyword, remaining, args.mask_reviews, flags)\n                records.extend(found)\n            if halted:\n                break\n        await browser.close()\n    return records, flags, categories_discovered, halted\n\n\ndef write_output(records, flags, output_path):\n    safe_records = [{key: sanitize_cell_value(value) for key, value in record.items()} for record in records]\n    safe_flags = [{key: sanitize_cell_value(value) for key, value in flag.items()} for flag in flags]\n    with pd.ExcelWriter(output_path, engine=\"openpyxl\") as writer:\n        pd.DataFrame(safe_records).to_excel(writer, sheet_name=\"Extracted Data\", index=False)\n        pd.DataFrame(safe_flags, columns=[\"Type\", \"URL\", \"Message\"]).to_excel(writer, sheet_name=\"Flags\", index=False)\n\n\ndef main():\n    parser = argparse.ArgumentParser(description=\"Massachusetts corporations scraper\")\n    parser.add_argument(\"--input\", default=\"input.xlsx\")\n    parser.add_argument(\"--output\", default=\"output.xlsx\")\n    parser.add_argument(\"--max-products\", type=int, default=None)\n    parser.add_argument(\"--headless\", action=argparse.BooleanOptionalAction, default=True)\n    parser.add_argument(\"--mask-reviews\", action=argparse.BooleanOptionalAction, default=True)\n    args = parser.parse_args()\n    try:\n        input_df = pd.read_excel(args.input).fillna(\"\")\n    except FileNotFoundError:\n        input_df = pd.DataFrame([{\"keyword\": \"mobius\"}])\n        log(f\"Input file {args.input} was not found; using the inspection keyword 'mobius'.\")\n    except Exception as exc:\n        log(f\"Unable to read input workbook: {exc}\")\n        sys.exit(1)\n    records, flags, categories, halted = asyncio.run(run(args, input_df))\n    links_discovered = len(records)\n    log(f\"Crawl Funnel: {categories} categories, {links_discovered} links discovered, {len(records)} processed, {len(records)} extracted.\")\n    if halted and any(flag.get(\"Type\") == \"Blocked by bot protection\" for flag in flags):\n        write_output(records, flags, args.output)\n        log(\"Blocked by bot protection; stopped without retries.\")\n        return\n    if not records:\n        status, html = static_status(TARGET_URL)\n        title = BeautifulSoup(html, \"html.parser\").title.get_text(strip=True) if html else \"\"\n        flags.append({\"Type\": \"Error\", \"URL\": TARGET_URL, \"Message\": f\"No product records found: HTTP {status}, Title: '{title}', Screenshot: diagnostic_screenshot.png\"})\n        log(f\"No product records found: HTTP {status}, Title: '{title}', Screenshot: diagnostic_screenshot.png\")\n        log(\"ERROR: Zero product records were extracted. Aborting.\")\n        write_output(records, flags, args.output)\n        sys.exit(1)\n    for record in records:\n        for field in (\"Entity Name\", \"ID Number\", \"Entity Type\", \"Principal Office Address\", \"Current Status\", \"Entity Detail URL\"):\n            if not record.get(field):\n                flags.append({\"Type\": \"Missing Field\", \"URL\": record.get(\"product_url\", \"\"), \"Message\": f\"Missing {field}\"})\n    write_output(records, flags, args.output)\n    log(f\"Wrote {len(records)} records to {args.output}.\")\n\n\nif __name__ == \"__main__\":\n    main()",
+  "requirements_txt": "pandas\nopenpyxl\nrequests\nbeautifulsoup4\nplaywright",
+  "confidence_notes": [
+    "The live site kept search results on CorpSearch.aspx after ASP.NET postback, despite the requester mentioning CorpSearchResults.aspx; the script follows the inspected live behavior.",
+    "The script uses Playwright because search submission and pagination require ASP.NET postbacks and JavaScript; requests is used for HTTP preflight/status diagnostics rather than a nonexistent entity-data API.",
+    "Only the first results page was inspected directly; page-2 handling is implemented from the observed __doPostBack pagination pattern but was not verified live.",
+    "Current Status was not visible in the inspected detail summary. The script checks #MainContent_tblStatus and records a missing-field flag when it is absent, without inventing a value.",
+    "Entity Type and detail-page fields are extracted from label/value rows where available, with conservative table-text fallbacks because the exact internal row markup was not provided.",
+    "Reviewer, registered-agent, resident, and officer tables are not extracted. No review accordion is opened; mask_reviews is retained as a contract-compatible option.",
+    "The requested diagnostic screenshot is logged on zero records, but a screenshot cannot be guaranteed if browser startup or navigation fails before a usable Playwright page exists.",
+    "Product IDs use the detail URL sysvalue consistently, falling back to a URL-derived identifier only when sysvalue is unavailable.",
+    "The fallback input keyword 'mobius' is used only when input.xlsx is absent; this assumption is based on the inspection sample and is noted for operational transparency.",
+    "Duplicate-looking entities are preserved and are not deduplicated."
+  ],
+  "total_tool_calls": 11,
+  "action_log": [
+    {
+      "ts": "2026-10-14T17:13:34",
+      "phase": "recon",
+      "tool": "browser_navigate",
+      "input": {
+        "url": "https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSearch.aspx"
+      },
+      "call_number": 1
+    },
+    {
+      "ts": "2026-10-14T17:13:48",
+      "phase": "recon",
+      "tool": "browser_snapshot",
+      "input": {},
+      "call_number": 2
+    },
+    {
+      "ts": "2026-10-14T17:13:50",
+      "phase": "recon",
+      "tool": "browser_evaluate",
+      "input": {
+        "expression": "JSON.stringify([...document.querySelectorAll('input,select,button')].map(e=>({tag:e.tagName,type:e.type,id:e.id,name:e.name,value:e.value,text:e.innerText,checked:e.checked})))"
+      },
+      "call_number": 3
+    },
+    {
+      "ts": "2026-10-14T17:13:51",
+      "phase": "recon",
+      "tool": "browser_type",
+      "input": {
+        "selector": "#MainContent_txtEntityName",
+        "text": "mobius"
+      },
+      "call_number": 4
+    },
+    {
+      "ts": "2026-10-14T17:13:53",
+      "phase": "recon",
+      "tool": "browser_click",
+      "input": {
+        "selector": "#MainContent_btnSearch"
+      },
+      "call_number": 5
+    },
+    {
+      "ts": "2026-10-14T17:13:55",
+      "phase": "recon",
+      "tool": "browser_snapshot",
+      "input": {},
+      "call_number": 6
+    },
+    {
+      "ts": "2026-10-14T17:13:57",
+      "phase": "recon",
+      "tool": "browser_evaluate",
+      "input": {
+        "expression": "JSON.stringify({tables:[...document.querySelectorAll('table')].map(t=>({id:t.id,cls:t.className,text:t.innerText.slice(0,3000),html:t.outerHTML.slice(0,5000)})),links:[...document.querySelectorAll('a')].map(a=>({text:a.innerText.trim(),href:a.href})).filter(x=>x.text||x.href.includes('Corp'))})"
+      },
+      "call_number": 7
+    },
+    {
+      "ts": "2026-10-14T17:13:59",
+      "phase": "recon",
+      "tool": "browser_click",
+      "input": {
+        "selector": "a[href*='CorpSummary.aspx']"
+      },
+      "call_number": 8
+    },
+    {
+      "ts": "2026-10-14T17:14:02",
+      "phase": "recon",
+      "tool": "browser_snapshot",
+      "input": {},
+      "call_number": 9
+    },
+    {
+      "ts": "2026-10-14T17:14:04",
+      "phase": "recon",
+      "tool": "browser_evaluate",
+      "input": {
+        "expression": "JSON.stringify({text:document.body.innerText.slice(0,6000),tables:[...document.querySelectorAll('table')].map(t=>({id:t.id,cls:t.className,text:t.innerText.slice(0,4000)})),inputs:[...document.querySelectorAll('input,button')].map(e=>({id:e.id,name:e.name,value:e.value,text:e.innerText}))})"
+      },
+      "call_number": 10
+    },
+    {
+      "ts": "2026-10-14T17:14:05",
+      "phase": "recon",
+      "tool": "browser_network_requests",
+      "input": {},
+      "call_number": 11
+    }
+  ]
+}
+
+CURRENT BROKEN CODE:
+```python
+import argparse
+import asyncio
+import hashlib
+import json
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import parse_qs, urljoin, urlparse
+
+import pandas as pd
+from bs4 import BeautifulSoup
+from openpyxl import Workbook, load_workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+
+TARGET_URL = "https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSearch.aspx"
+BASE_URL = "https://corp.sec.state.ma.us/"
+GRID_SELECTOR = "#MainContent_SearchControl_grdSearchResultsEntity"
+ROW_SELECTOR = GRID_SELECTOR + " tr.GridRow, " + GRID_SELECTOR + " tr.GridAltRow"
+DETAIL_LINK_SELECTOR = GRID_SELECTOR + " a.link[href*='CorpSummary.aspx']"
+
+
+def log(message):
+    print(f"[{datetime.now(timezone.utc).isoformat()}] {message}", flush=True)
+
+
+def sanitize_cell_value(val, max_len=32000):
+    if val is None:
+        return ""
+    if isinstance(val, (dict, list)):
+        s = json.dumps(val, ensure_ascii=False)
+    else:
+        s = str(val)
+    if len(s) > max_len:
+        return s[:max_len - 35] + "... [TRUNCATED_EXCEL_LIMIT]"
+    return s
+
+
+def clean(value):
+    if value is None or pd.isna(value) or str(value).strip().lower() in ("", "nan", "none", "null"):
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    text = str(value).replace("\xa0", " ").strip()
+    return "" if text.lower() in {"", "nan", "none", "null"} else re.sub(r"\s+", " ", text)
+
+
+def value_from_row(row, key):
+    return clean(row.get(key, ""))
+
+
+def canonical_product_id(url):
+    parsed = urlparse(url)
+    value = parse_qs(parsed.query).get("sysvalue", [""])[0].strip()
+    if value:
+        return value
+    return hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
+
+
+def detect_anti_bot_signals(status, html):
+    text = (html or "").lower()
+    markers = (
+        "cloudflare turnstile",
+        "just a moment...",
+        "datadome",
+        "perimeterx",
+        "verify you are human",
+    )
+    if status in {403, 429} or any(marker in text for marker in markers):
+        return "Blocked by bot protection"
+    return ""
+
+
+def mask_reviewer_pii(text):
+    text = clean(text)
+    text = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "***@***.***", text)
+
+    def mask_name(match):
+        parts = match.group(0).split()
+        return " ".join(f"{part[0]}***" if i == 0 else f"{part[0]}." for i, part in enumerate(parts))
+
+    return re.sub(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b", mask_name, text)
+
+
+def table_field(soup, selector, labels):
+    table = soup.select_one(selector)
+    if not table:
+        return ""
+    wanted = {clean(label).lower().rstrip(":") for label in labels}
+    for row in table.select("tr"):
+        cells = [clean(" ".join(cell.stripped_strings)) for cell in row.select("th, td")]
+        cells = [cell for cell in cells if cell]
+        if len(cells) >= 2 and cells[0].lower().rstrip(":") in wanted:
+            return clean(" ".join(cells[1:]))
+    return ""
+
+
+def table_text(soup, selector):
+    table = soup.select_one(selector)
+    return clean(" ".join(table.stripped_strings)) if table else ""
+
+
+def principal_office(soup):
+    table = soup.select_one("#MainContent_tblPrincipleOffice")
+    if not table:
+        return ""
+    values = []
+    for row in table.select("tr"):
+        cells = [clean(" ".join(cell.stripped_strings)) for cell in row.select("th, td")]
+        cells = [cell for cell in cells if cell]
+        if not cells:
+            continue
+        label = cells[0].lower().rstrip(":")
+        if label in {"address", "principal office address", "location"}:
+            values.extend(cells[1:])
+        elif len(cells) == 1 and not values:
+            values.append(cells[0])
+    return clean(" ".join(values)) or table_text(soup, "#MainContent_tblPrincipleOffice")
+
+
+def extract_detail(html, url, source_listing_url, mask_reviews):
+    soup = BeautifulSoup(html or "", "html.parser")
+    entity_name = table_field(soup, "#MainContent_tblEntity", ["Entity Name", "Name"])
+    entity_type = table_field(soup, "#MainContent_tblEntityType", ["Entity Type", "Type"])
+    id_number = table_field(soup, "#MainContent_tblIDNumber", ["ID Number", "Identification Number"])
+    office = principal_office(soup)
+    status = table_field(soup, "#MainContent_tblStatus", ["Current Status", "Status"])
+    if mask_reviews:
+        office = mask_reviewer_pii(office)
+    return {
+        "product_id": canonical_product_id(url),
+        "product_url": url,
+        "source_listing_url": source_listing_url or "DIRECT_INPUT",
+        "Entity Name": entity_name,
+        "ID Number": id_number,
+        "Entity Type": entity_type,
+        "Principal Office Address": office,
+        "Current Status": status,
+        "Entity Detail URL": url,
+    }
+
+
+async def dismiss_cookie_banner(page):
+    selectors = [
+        "button:has-text('Accept')",
+        "button:has-text('Allow all')",
+        "button:has-text('I agree')",
+        "[id*='cookie' i] button",
+        "[class*='cookie' i] button",
+    ]
+    for selector in selectors:
+        locator = page.locator(selector).first
+        try:
+            if await locator.is_visible(timeout=500):
+                await locator.click(timeout=1500)
+                return
+        except Exception:
+            continue
+
+
+async def safe_click(page, locator, selector, flags, url):
+    try:
+        await locator.click(timeout=7000)
+        return True
+    except Exception as exc:
+        log(f"Click blocked on locator '{selector}': {exc}")
+        flags.append({"Type": "Click Intercepted", "URL": url, "Message": f"Element {selector} blocked: {str(exc)[:200]}"})
+        try:
+            await page.keyboard.press("Escape")
+            await dismiss_cookie_banner(page)
+            await locator.click(timeout=2500)
+            return True
+        except Exception:
+            try:
+                await locator.evaluate("el => el.click()")
+                return True
+            except Exception as fallback_exc:
+                log(f"Click fallback failed on locator '{selector}': {fallback_exc}")
+                flags.append({"Type": "Error", "URL": url, "Message": str(fallback_exc)[:300]})
+                return False
+
+
+async def goto_checked(page, url, flags):
+    try:
+        response = await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+    except Exception as exc:
+        flags.append({"Type": "Error", "URL": url, "Message": str(exc)[:300]})
+        return None, ""
+    await dismiss_cookie_banner(page)
+    html = await page.content()
+    status = response.status if response else 0
+    blocked = detect_anti_bot_signals(status, html)
+    if blocked:
+        flags.append({"Type": blocked, "URL": page.url, "Message": blocked})
+        log(f"{blocked}: {page.url}")
+        return response, blocked
+    return response, html
+
+
+async def get_detail(page, url, source_listing_url, mask_reviews, flags):
+    response, html = await goto_checked(page, url, flags)
+    if isinstance(html, str) and html == "Blocked by bot protection":
+        return None, True
+    if not html:
+        return None, False
+    return extract_detail(html, page.url, source_listing_url, mask_reviews), False
+
+
+async def wait_for_new_grid(page, old_signature):
+    try:
+        await page.wait_for_load_state("networkidle", timeout=30000)
+    except PlaywrightTimeoutError:
+        pass
+    try:
+        await page.wait_for_selector(GRID_SELECTOR, timeout=30000)
+        for _ in range(30):
+            signature = await page.locator(GRID_SELECTOR).inner_text()
+            if signature != old_signature:
+                return True
+            await page.wait_for_timeout(200)
+    except PlaywrightTimeoutError:
+        return False
+    return False
+
+
+async def extract_listing(page, listing_url, keyword, limit, mask_reviews, flags):
+    response, html = await goto_checked(page, listing_url, flags)
+    if html == "Blocked by bot protection":
+        return [], True
+    if not html:
+        return [], False
+    try:
+        await page.wait_for_selector("#MainContent_rdoByEntityName", timeout=20000)
+        radio = page.locator("#MainContent_rdoByEntityName")
+        if not await radio.is_checked():
+            await radio.check()
+        if keyword:
+            await page.locator("#MainContent_txtEntityName").fill(keyword)
+        await page.locator("#MainContent_ddBeginsWithEntityName").select_option("B")
+        if not await safe_click(page, page.locator("#MainContent_btnSearch"), "#MainContent_btnSearch", flags, page.url):
+            return [], False
+        await page.wait_for_selector(GRID_SELECTOR, timeout=30000)
+    except Exception as exc:
+        flags.append({"Type": "Error", "URL": page.url, "Message": f"Search failed: {str(exc)[:300]}"})
+        return [], False
+
+    records = []
+    seen_signatures = set()
+    detail_page = await page.context.new_page()
+    try:
+        while len(records) < limit:
+            grid = page.locator(GRID_SELECTOR)
+            signature = await grid.inner_text()
+            if signature in seen_signatures:
+                break
+            seen_signatures.add(signature)
+            rows = page.locator(ROW_SELECTOR)
+            links = []
+            for index in range(await rows.count()):
+                row = rows.nth(index)
+                link = row.locator("a.link[href*='CorpSummary.aspx']").first
+                if await link.count() == 0:
+                    continue
+                href = await link.get_attribute("href")
+                listing_name = clean(await link.inner_text())
+                cells = row.locator("td")
+                cell_values = [clean(await cells.nth(i).inner_text()) for i in range(await cells.count())]
+                listing_id = cell_values[0] if cell_values else ""
+                listing_address = cell_values[-1] if cell_values else ""
+                if href:
+                    links.append((urljoin(page.url, href), listing_name, listing_id, listing_address))
+            for detail_url, listing_name, listing_id, listing_address in links:
+                if len(records) >= limit:
+                    break
+                record, halted = await get_detail(detail_page, detail_url, page.url, mask_reviews, flags)
+                if halted:
+                    return records, True
+                if record:
+                    record["Entity Name"] = record["Entity Name"] or listing_name
+                    record["ID Number"] = record["ID Number"] or listing_id
+                    record["Principal Office Address"] = record["Principal Office Address"] or listing_address
+                    records.append(record)
+            if len(records) >= limit:
+                break
+            next_link = None
+            anchors = page.locator(GRID_SELECTOR + " a")
+            for index in range(await anchors.count()):
+                anchor = anchors.nth(index)
+                href = (await anchor.get_attribute("href") or "")
+                text = clean(await anchor.inner_text()).lower()
+                if "page$" in href.lower() and (text == "next" or text.isdigit()):
+                    next_link = anchor
+                    break
+            if next_link is None:
+                break
+            if not await safe_click(page, next_link, GRID_SELECTOR + " a", flags, page.url):
+                break
+            if not await wait_for_new_grid(page, signature):
+                break
+    finally:
+        await detail_page.close()
+    return records, False
+
+
+async def run(args, input_df):
+    records, flags = [], []
+    rows = input_df.to_dict("records")
+    categories = len(rows)
+    status = 0
+    title = ""
+    screenshot_page = None
+    halted = False
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=args.headless, args=["--disable-blink-features=AutomationControlled"])
+        context = await browser.new_context(user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36")
+        page = await context.new_page()
+        try:
+            for row in rows:
+                if args.max_products is not None and len(records) >= args.max_products:
+                    break
+                detail_url = value_from_row(row, "detail_url")
+                listing_url = value_from_row(row, "listing_url") or TARGET_URL
+                keyword = value_from_row(row, "keyword")
+                remaining = (args.max_products - len(records)) if args.max_products is not None else 10**9
+                if detail_url:
+                    detail_page = await context.new_page()
+                    try:
+                        record, halted = await get_detail(detail_page, urljoin(BASE_URL, detail_url), "DIRECT_INPUT", args.mask_reviews, flags)
+                        if record:
+                            records.append(record)
+                    finally:
+                        await detail_page.close()
+                else:
+                    found, halted = await extract_listing(page, listing_url, keyword, remaining, args.mask_reviews, flags)
+                    records.extend(found)
+                if halted:
+                    break
+            screenshot_page = page
+            status = 200
+            title = await page.title() if page else ""
+            if not records and page:
+                try:
+                    await page.screenshot(path="diagnostic_screenshot.png", full_page=True)
+                except Exception as exc:
+                    flags.append({"Type": "Error", "URL": page.url, "Message": f"Screenshot failed: {str(exc)[:200]}"})
+        finally:
+            await browser.close()
+    return records, flags, categories, halted, status, title
+
+
+def write_output(records, flags, output_path, source_workbook=None):
+    output = Path(output_path)
+    source = Path(source_workbook) if source_workbook else None
+    if output.exists():
+        workbook = load_workbook(output)
+    elif source and source.exists():
+        workbook = load_workbook(source)
+    else:
+        workbook = Workbook()
+    for sheet_name in ("Extracted Data", "Flags"):
+        if sheet_name in workbook.sheetnames:
+            del workbook[sheet_name]
+    data_ws = workbook.create_sheet("Extracted Data", 0)
+    flags_ws = workbook.create_sheet("Flags", 1)
+    safe_records = [{key: sanitize_cell_value(value) for key, value in record.items()} for record in records]
+    safe_flags = [{key: sanitize_cell_value(value) for key, value in flag.items()} for flag in flags]
+    data_df = pd.DataFrame(safe_records)
+    if not data_df.empty:
+        for row in dataframe_to_rows(data_df, index=False, header=True):
+            data_ws.append(row)
+    else:
+        data_ws.append(["product_id", "product_url", "source_listing_url", "Entity Name", "ID Number", "Entity Type", "Principal Office Address", "Current Status", "Entity Detail URL"])
+    flag_df = pd.DataFrame(safe_flags, columns=["Type", "URL", "Message"])
+    for row in dataframe_to_rows(flag_df, index=False, header=True):
+        flags_ws.append(row)
+    workbook.save(output_path)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Massachusetts corporations scraper")
+    parser.add_argument("--input", default="input.xlsx")
+    parser.add_argument("--output", default="output.xlsx")
+    parser.add_argument("--max-products", type=int, default=None)
+    parser.add_argument("--headless", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--mask-reviews", action=argparse.BooleanOptionalAction, default=True)
+    args = parser.parse_args()
+    try:
+        input_df = pd.read_excel(args.input).fillna("")
+    except FileNotFoundError:
+        input_df = pd.DataFrame([{"keyword": "mobius"}])
+        log(f"Input file {args.input} was not found; using keyword 'mobius'.")
+    except Exception as exc:
+        log(f"Unable to read input workbook: {exc}")
+        sys.exit(1)
+    try:
+        records, flags, categories, halted, status, title = asyncio.run(run(args, input_df))
+    except Exception as exc:
+        log(f"Fatal crawl error: {exc}")
+        flags = [{"Type": "Error", "URL": TARGET_URL, "Message": str(exc)[:500]}]
+        records, categories, halted, status, title = [], len(input_df), False, 0, ""
+    processed = len(records)
+    log(f"Crawl Funnel: {categories} categories, {processed} links discovered, {processed} processed, {len(records)} extracted.")
+    if halted and any(flag.get("Type") == "Blocked by bot protection" for flag in flags):
+        write_output(records, flags, args.output, args.input)
+        log("Blocked by bot protection; stopped without retries.")
+        sys.exit(1)
+    if not records:
+        soup = BeautifulSoup("", "html.parser")
+        safe_title = soup.title.get_text(strip=True) if soup.title else title
+        flags.append({"Type": "Error", "URL": TARGET_URL, "Message": f"No product records found: HTTP {status}, Title: '{safe_title}', Screenshot: diagnostic_screenshot.png"})
+        log(f"No product records found: HTTP {status}, Title: '{safe_title}', Screenshot: diagnostic_screenshot.png")
+        log("ERROR: Zero product records were extracted. Aborting.")
+        write_output(records, flags, args.output, args.input)
+        sys.exit(1)
+    for record in records:
+        for field in ("product_id", "product_url", "source_listing_url", "Entity Name", "ID Number", "Entity Type", "Principal Office Address", "Current Status", "Entity Detail URL"):
+            if not clean(record.get(field)):
+                flags.append({"Type": "Missing Field", "URL": record.get("product_url", ""), "Message": f"Missing {field}"})
+    write_output(records, flags, args.output, args.input)
+    log(f"Wrote {len(records)} records to {args.output}.")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+INSTRUCTIONS FOR REPAIR:
+1. Incorporate the verified working selectors and findings discovered during the live diagnostic inspection session.
+2. If dynamic JavaScript elements, prices, or specs were missing, or if click interactions failed, use Playwright async browser automation (`playwright.async_api.async_playwright()`) with `page.wait_for_selector()`, selector auto-waiting, and auto-dismiss cookie banners.
+3. If 0 rows were extracted due to overly restrictive keyword/category filtering, relax the matching logic or match against URL slugs.
+4. Ensure the script follows the mandatory SCRIPT CONTRACT strictly.
+5. Return your final answer as a single JSON object with keys "generated_code", "requirements_txt", and "confidence_notes".
+
+MANDATORY SCRIPT CONTRACT - every scraper you write MUST follow this exact
+shape, regardless of the target site. This is not optional or per-job -
+every script this service produces must be a drop-in replacement for any
+other, so a person running it never has to read the code first to figure
+out how to call it:
+
+  - Command-line args via argparse:
+      `--input` (default "input.xlsx"),
+      `--output` (default "output.xlsx"),
+      `--max-products` (optional int cap),
+      `--headless` (default True, flag to run browser headless or visible),
+      `--mask-reviews` (default True, flag to mask reviewer PII and skip review accordions).
+
+  - Input Excel columns (any subset may be populated - handle all three):
+      `keyword`, `listing_url`, `detail_url` - semantics:
+      * `keyword`: triggers a search/match flow against the listing page or direct URL.
+      * `listing_url`: crawls a specific listing page (or falls back to default TARGET_URL).
+      * `detail_url`: scrapes one item page directly, skipping listing discovery.
+      * IMPORTANT: `detail_url` must be a genuinely independent fast path that extracts
+        the single page directly without requiring a listing crawl first.
+
+  - CANONICAL PRODUCT IDENTIFIERS & PROVENANCE URLS (MANDATORY SCHEMA):
+      Every extracted record MUST contain these three standardized columns:
+      1. `product_id`: Single deterministic primary key.
+         * Resolution hierarchy:
+           - Priority 1: Official SKU, model code, or MPN (e.g. from JSON-LD `sku`/`productID` or page metadata).
+           - Priority 2: Canonical URL slug / product ID extracted from the product URL via a consistent regex pattern.
+           - STRICT: Use the exact same ID strategy across all rows in the dataset; NEVER arbitrarily mix SKU for one product and URL slug for another.
+      2. `product_url`: Direct canonical URL of the product detail page.
+      3. `source_listing_url`: The category or listing URL from which the item was discovered (or "DIRECT_INPUT" if passed directly via input.xlsx detail_url).
+      * NOTE: Do NOT output a duplicate "Source URL" column that mirrors "product_url".
+
+  - STRICT ELEMENT-SCOPED PRICE EXTRACTION & NUMBER ISOLATION (CRITICAL):
+      * Prices MUST be extracted EXCLUSIVELY from within the product's primary pricing container
+        or buy box (e.g. `[itemprop="price"]`, `.price`, `.product-price`, `.current-price`, or JSON-LD `offers.price`).
+      * NEVER execute price regexes or digit extractors against product headings (`h1`, `h2`, `h3`, `.title`, `.product-name`),
+        description paragraphs, promo banners, or recommendation carousels (`.carousel`, `.recommendations`, `.related-products`).
+      * Title Digits Trap: Numbers in product titles (e.g., "250 North American Birds Sound Book") are NOT prices!
+      * Currency Anchoring: For text extraction, anchor to currency symbols or ISO codes:
+        e.g., `r'(?i)(?:[\$£€₹]|USD|CAD|EUR|GBP)\s*(\d{1,5}(?:[.,]\d{2})?)'`
+        Reject raw standalone numbers without currency indicators found in prose or headings.
+
+  - CRAWL FUNNEL TELEMETRY & LOUD FAILURE ON EMPTY:
+      * Scrapers must track and log crawl funnel metrics using `log()`:
+        `categories_discovered`, `links_discovered`, `links_processed`, `records_extracted`.
+        Example: `log(f"Crawl Funnel: {num_categories} categories, {num_links} links discovered, {num_processed} processed, {num_extracted} extracted.")`
+      * FAIL LOUDLY: If the crawl completes with 0 records extracted, the script MUST log:
+        `ERROR: Zero product records were extracted. Aborting.` and exit with `sys.exit(1)`.
+      * DIAGNOSTIC SCREENSHOT ON ZERO RECORDS: If 0 product records are found on the target listing/detail page,
+        take a full-page screenshot using Playwright saved to `diagnostic_screenshot.png`, capture the HTTP status code
+        and page `<title>`, and log: `log(f"No product records found: HTTP {status}, Title: '{title}', Screenshot: diagnostic_screenshot.png")`.
+
+  - EXCEL CELL LENGTH LIMIT PROTECTION (32,767 CHARACTERS):
+      * Excel cells corrupt or truncate if text exceeds 32,767 characters.
+      * Every script MUST define and use a `sanitize_cell_value(val, max_len=32000)` helper:
+        ```python
+        def sanitize_cell_value(val, max_len=32000):
+            if val is None:
+                return ""
+            if isinstance(val, (dict, list)):
+                s = json.dumps(val, ensure_ascii=False)
+            else:
+                s = str(val)
+            if len(s) > max_len:
+                return s[:max_len - 35] + "... [TRUNCATED_EXCEL_LIMIT]"
+            return s
+        ```
+      * Pass all field values through `sanitize_cell_value()` before exporting to DataFrame / Excel.
+
+  - CLICK INTERCEPTION & MODAL OVERLAY ERROR LOGGING:
+      * When clicks are blocked or intercepted by overlays/popups, catch the exception, log the real error:
+        `log(f"Click blocked on locator '{selector}': {exc}")`
+      * Record in Flags sheet: `{"Type": "Click Intercepted", "URL": url, "Message": f"Element {selector} blocked: {str(exc)[:200]}"}`
+      * Fallbacks: try pressing Escape (`await page.keyboard.press("Escape")`), dismiss modal overlays,
+        or dispatch JS click (`await locator.evaluate("el => el.click()")`).
+
+  - BOT PROTECTION FAST-FAIL (NO FUTILE RETRIES):
+      * In `detect_anti_bot_signals()`: If HTTP status is 403, 429, or page contains WAF challenge markers:
+        Always inspect both HTTP status and HTML text (lowercase). Include all enterprise and state WAF signatures:
+        markers = (
+            "cloudflare turnstile", "cf-browser-verification", "ray id:", "just a moment...",
+            "datadome", "perimeterx", "px-captcha", "distil networks", "press & hold",
+            "incapsula", "_incapsula_resource", "imperva", "incident id", "kasada",
+            "akamai", "shieldsquare", "security challenge", "pardon our interruption",
+            "potential security risk", "detected automated scripts", "additional security check",
+            "i am human", "hcaptcha", "access denied", "robot or human"
+        )
+        Classify as "Blocked by bot protection", log to Flags, and STOP RETRYING immediately. Exit cleanly with anti-bot status.
+
+  - SAFE PAGE TITLE & BEAUTIFULSOUP PARSING:
+      * Never call `.title.get_text()` without guarding against None:
+        `safe_title = soup.title.get_text(strip=True) if getattr(soup, "title", None) else ""`
+
+
+  - PERSONAL DATA & REVIEW ACCORDION FILTERING:
+      * When expanding accordions to discover specs, DO NOT click review accordions:
+        Skip any selector matching `[class*='review' i]`, `[id*='review' i]`, `button:has-text('Review')`, `button:has-text('Rating')`.
+      * If `--mask-reviews` is True (default) and review text is extracted:
+        Apply regex masking to reviewer names (`John Doe` -> `J*** D.`) and email addresses (`***@***.***`).
+
+  - OUTPUT EXCEL SHEETS (EXTENSIBLE CONTRACT):
+      * Must contain at least two sheets:
+        1. "Extracted Data": One row per item.
+        2. "Flags": One row per anti-bot signal, missing field, low-confidence extraction, or error.
+           Include entries if core fields (e.g. brand, category, price) are missing on a product.
+      * MULTI-SHEET EXTENSIBILITY: Scrapers may also write additional custom sheets if requested
+        (e.g., "Recommendations", "Variants", "Categories"). Repair agents and scripts MUST PRESERVE all custom sheets.
+
+  - CASCADE EXTRACTION STRATEGY:
+      1. Tier 1 (Internal JSON API): If observed during recon, query endpoint directly using requests/httpx.
+      2. Tier 2 (Hydrated State): Check for `<script id="__NEXT_DATA__">`, `<script id="__NUXT_DATA__">`,
+         `window.__INITIAL_STATE__`, or Schema.org JSON-LD blocks.
+      3. Tier 3 (Playwright Async Browser Automation): For modern JavaScript SPAs, client-rendered prices,
+         accordion spec tables, dynamic color/storage variants, and ASP.NET WebForms:
+         * Use `playwright.async_api.async_playwright()`.
+         * Launch Chromium with `--disable-blink-features=AutomationControlled`, `--no-sandbox`, and realistic User-Agent.
+         * Set viewport and inject stealth script immediately after creating context:
+           ```python
+           context = await browser.new_context(
+               user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+               viewport={"width": 1920, "height": 1080},
+           )
+           await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
+           ```
+         * Call `dismiss_cookie_banner(page)` immediately after `page.goto()`.
+         * Auto-wait for elements using `page.wait_for_selector()` or `page.locator()`.
+         * For ASP.NET / form submits that trigger navigation, wrap submits:
+           `async with page.expect_navigation(wait_until="domcontentloaded"): await submit_btn.click()`
+           or wait for the results grid directly after clicking.
+         * Click accordion tabs to reveal hidden specs (skipping review accordions).
+      4. Tier 4 (Static Fast-Path): For traditional server-rendered static HTML sites, use `requests`
+         with a desktop User-Agent and `BeautifulSoup`.
+
+  - Cookie & Consent Banner Dismissal:
+      Include a `dismiss_cookie_banner(page)` helper and call it once immediately after every `page.goto(...)`.
+
+  - Data Cleaning & Normalization:
+      * Clean currency/prices: extract clean formatted strings (e.g. "$24.99", "USD 120.00").
+      * Print timestamped log lines for each major step using a `log()` helper.
+
+  - REGEX & CODE SYNTAX RULES (CRITICAL):
+      * In raw strings (r"..." or r'...'), use SINGLE backslashes for regex tokens:
+        r"\d+", r"\s+", r"\b", r"\w+", r"\(?[2-9]\d{2}\)?", r"\.com".
+        NEVER double-escape inside raw strings (do NOT write r"\\d", r"\\s", r"\\b", r"\\(").
+      * When escaping literal parentheses in regex, use r"\(" and r"\)" (or re.escape).
+      * For HTML string cleaning with BeautifulSoup, use "\n" as separator and "\xa0" for non-breaking spaces.
+      * The script must be syntactically valid Python 3 and compile with zero errors.
+
+  - INPUT EXCEL & NAN HANDLING RULES (CRITICAL):
+      * When reading a single sheet from Excel with pandas:
+        `input_df = pd.read_excel(args.input).fillna("")`
+      * If reading multiple sheets with `sheet_name=None`, pandas returns a dict of DataFrames.
+        Apply `.fillna("")` to each DataFrame inside the dict:
+        `sheets = pd.read_excel(args.input, sheet_name=None)`
+        `sheets = {k: v.fillna("") for k, v in sheets.items()}`
+        `input_df = sheets.get("Extracted Data") or next(iter(sheets.values()), pd.DataFrame())`
+        NEVER call `.fillna("")` directly on the dict returned by `pd.read_excel(..., sheet_name=None)`!
+      * Any helper function (e.g. `clean()`, `value_from_row()`) MUST treat `pd.isna(val)`, `None`,
+        and the string `"nan"` / `"none"` / `"null"` as empty string `""`.
+      * NEVER allow `"nan"` to be treated as a valid `detail_url`, `listing_url`, or `keyword`.

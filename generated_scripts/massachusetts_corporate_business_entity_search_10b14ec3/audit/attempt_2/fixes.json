@@ -1,0 +1,25 @@
+{
+  "strategy": "live_mcp_codegen_repair",
+  "working_listing_selectors": {
+    "search_page": "#MainContent_rdoByEntityName",
+    "entity_name_input": "#MainContent_txtEntityName",
+    "search_type_dropdown": "#MainContent_ddBeginsWithEntityName",
+    "search_submit": "#MainContent_btnSearch",
+    "results_grid": "#MainContent_SearchControl_grdSearchResultsEntity",
+    "result_rows": "#MainContent_SearchControl_grdSearchResultsEntity tr.GridRow, #MainContent_SearchControl_grdSearchResultsEntity tr.GridAltRow",
+    "result_detail_links": "#MainContent_SearchControl_grdSearchResultsEntity a.link[href*='CorpSummary.aspx']",
+    "pagination_page_2": "#MainContent_SearchControl_grdSearchResultsEntity a[href*=\"Page$2\"]"
+  },
+  "working_detail_selectors": {
+    "summary_container": "table.center",
+    "entity_name_container": "#MainContent_tblEntity",
+    "entity_name_text": "#MainContent_tblEntity",
+    "entity_type_container": "#MainContent_tblEntityType",
+    "id_number_container": "#MainContent_tblIDNumber",
+    "principal_office_container": "#MainContent_tblPrincipleOffice",
+    "principal_office_address_rows": "#MainContent_tblPrincipleOffice tr",
+    "status": "No verified dedicated status selector; 'Current Status' was not visible on the inspected detail page",
+    "detail_url_pattern": "/CorpWeb/CorpSearch/CorpSummary.aspx?sysvalue=<opaque-value>"
+  },
+  "working_price_selector": "none; this is a corporate registry and no product pricing or buy-box element exists"
+}

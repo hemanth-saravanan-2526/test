@@ -1,0 +1,392 @@
+--- (New file created)
++++ attempt_1.py
+@@ -0,0 +1,389 @@
++import argparse
++import asyncio
++import json
++import re
++import sys
++from datetime import datetime
++from urllib.parse import urljoin, urlparse, parse_qs
++
++import pandas as pd
++from bs4 import BeautifulSoup
++from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
++
++TARGET_URL = "https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx"
++BASE_URL = "https://rnt.turismodeportugal.pt/RNT/"
++WAF_MARKERS = (
++    "cloudflare turnstile", "cf-browser-verification", "ray id:", "just a moment...",
++    "datadome", "perimeterx", "px-captcha", "distil networks", "press & hold",
++    "incapsula", "_incapsula_resource", "imperva", "incident id", "kasada",
++    "akamai", "shieldsquare", "security challenge", "pardon our interruption",
++    "potential security risk", "detected automated scripts", "additional security check",
++    "i am human", "hcaptcha", "access denied", "robot or human"
++)
++
++
++def log(message):
++    print(f"[{datetime.now().isoformat(timespec='seconds')}] {message}", flush=True)
++
++
++def sanitize_cell_value(val, max_len=32000):
++    if val is None:
++        return ""
++    if isinstance(val, (dict, list)):
++        s = json.dumps(val, ensure_ascii=False)
++    else:
++        s = str(val)
++    if len(s) > max_len:
++        return s[:max_len - 35] + "... [TRUNCATED_EXCEL_LIMIT]"
++    return s
++
++
++def clean(val):
++    if val is None:
++        return ""
++    try:
++        if pd.isna(val):
++            return ""
++    except (TypeError, ValueError):
++        pass
++    text = str(val).strip()
++    if text.lower() in {"nan", "none", "null"}:
++        return ""
++    return text
++
++
++def safe_title(soup):
++    return (soup.title.get_text(strip=True) if getattr(soup, "title", None) else "") if getattr(soup, "title", None) else ""
++
++
++def mask_reviewer_pii(text):
++    if not text:
++        return ""
++    text = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "***@***.***", text)
++
++    def mask_name(match):
++        words = match.group(0).split()
++        return " ".join((word[0] + "***" if len(word) > 1 else word) for word in words[:-1]) + " " + words[-1][0] + "."
++
++    return re.sub(r"\b[A-ZÀ-Ý][a-zà-ÿ]+\s+[A-ZÀ-Ý][a-zà-ÿ]+\b", mask_name, text)
++
++
++def parse_input(path):
++    input_df = pd.read_excel(path, header=None).fillna("")
++    if input_df.empty:
++        return []
++    first = [clean(v).lower() for v in input_df.iloc[0].tolist()]
++    known = {"keyword", "listing_url", "detail_url"}
++    has_header = bool(set(first) & known)
++    rows = []
++    if has_header:
++        positions = {name: first.index(name) for name in known if name in first}
++        data = input_df.iloc[1:]
++        for _, row in data.iterrows():
++            rows.append({name: clean(row.iloc[pos]) for name, pos in positions.items()})
++    else:
++        for _, row in input_df.iterrows():
++            values = [clean(v) for v in row.tolist()]
++            item = {"keyword": values[0] if values else ""}
++            if len(values) > 1:
++                item["listing_url"] = values[1]
++            if len(values) > 2:
++                item["detail_url"] = values[2]
++            rows.append(item)
++    return [row for row in rows if any(clean(v) for v in row.values())]
++
++
++async def dismiss_cookie_banner(page):
++    for selector in (
++        "button:has-text('Aceitar')", "button:has-text('Accept')",
++        "button:has-text('Concordo')", "[id*='cookie' i] button"
++    ):
++        try:
++            loc = page.locator(selector).first
++            if await loc.is_visible(timeout=500):
++                await loc.click(timeout=1500)
++                return
++        except Exception:
++            continue
++
++
++async def detect_anti_bot_signals(page, response, flags, url):
++    status = response.status if response else 0
++    html = (await page.content()).lower()
++    matched = [marker for marker in WAF_MARKERS if marker in html]
++    if status in {403, 429} or matched:
++        message = f"HTTP {status}; markers: {', '.join(matched) or 'none'}"
++        flags.append({"Type": "Blocked by bot protection", "URL": url, "Message": message})
++        log(f"Blocked by bot protection: {message}")
++        return True
++    return False
++
++
++async def goto_page(page, url, flags):
++    log(f"Opening {url}")
++    try:
++        response = await page.goto(url, wait_until="domcontentloaded", timeout=45000)
++    except Exception as exc:
++        flags.append({"Type": "Error", "URL": url, "Message": str(exc)[:500]})
++        log(f"Navigation error: {exc}")
++        return None, False
++    await dismiss_cookie_banner(page)
++    blocked = await detect_anti_bot_signals(page, response, flags, url)
++    if not blocked:
++        try:
++            await page.wait_for_load_state("networkidle", timeout=10000)
++        except PlaywrightTimeoutError:
++            pass
++    return response, blocked
++
++
++async def safe_click(page, locator, selector, flags, url):
++    try:
++        await locator.click(timeout=10000)
++        return True
++    except Exception as exc:
++        log(f"Click blocked on locator '{selector}': {exc}")
++        flags.append({"Type": "Click Intercepted", "URL": url, "Message": f"Element {selector} blocked: {str(exc)[:200]}"})
++        try:
++            await page.keyboard.press("Escape")
++            await locator.click(timeout=3000)
++            return True
++        except Exception:
++            try:
++                await locator.evaluate("el => el.click()")
++                return True
++            except Exception as fallback_exc:
++                log(f"Click fallback failed: {fallback_exc}")
++                return False
++
++
++def row_value(row, index):
++    return clean(row[index]) if index < len(row) else ""
++
++
++def extract_listing_rows(html, current_url):
++    soup = BeautifulSoup(html, "html.parser")
++    table = soup.select_one("#RichWidgets_wt104_block_wtMainContent_wttrRegistos")
++    if not table:
++        return []
++    results = []
++    for tr in table.select("tr"):
++        cells = [cell.get_text(" ", strip=True) for cell in tr.select("td")]
++        link = tr.select_one("a[href*='RNET.aspx?nr=']")
++        if not cells or not link:
++            continue
++        href = urljoin(current_url, link.get("href", ""))
++        match = re.search(r"[?&]nr=(\d+)", href)
++        product_id = match.group(1) if match else row_value(cells, 0)
++        results.append({
++            "product_id": product_id,
++            "product_url": href,
++            "source_listing_url": current_url,
++            "Nº": row_value(cells, 0),
++            "Data": row_value(cells, 1),
++            "Nome": row_value(cells, 2),
++            "Tipologia": row_value(cells, 3),
++            "Capacidade": row_value(cells, 4),
++            "Localização": row_value(cells, 5),
++            "Certificações": row_value(cells, 6),
++        })
++    return results
++
++
++def detail_fields(html):
++    soup = BeautifulSoup(html, "html.parser")
++    pairs = {}
++    for tr in soup.select("tr"):
++        cells = [c.get_text(" ", strip=True) for c in tr.select("th, td")]
++        if len(cells) >= 2:
++            key = re.sub(r"\s+", " ", cells[0]).strip(" :")
++            value = " ".join(cells[1:]).strip()
++            if key and value:
++                pairs[key.lower()] = value
++    full = soup.get_text("\n", strip=True)
++
++    def find(label_patterns):
++        for key, value in pairs.items():
++            if any(pattern in key for pattern in label_patterns):
++                return value
++        for pattern in label_patterns:
++            match = re.search(r"" + re.escape(pattern) + r"\s*:?\s*([^\n]+)", full, re.I)
++            if match:
++                return match.group(1).strip()
++        return ""
++
++    rnet = find(["rnet nº", "rnet n", "rnet"])
++    number_match = re.search(r"\b(\d+)\b", rnet) if rnet else re.search(r"RNET\s*n[ºo]?\s*[:\-]?\s*(\d+)", full, re.I)
++    return {
++        "RNET nº": number_match.group(1) if number_match else rnet,
++        "Data de Registo": find(["data de registo", "registado em"]),
++        "Tipologia Completa": find(["tipologia completa", "tipologia"]),
++        "Morada e Código Postal": find(["morada e código postal", "morada", "código postal"]),
++        "Contactos": find(["contactos", "contacto"]),
++        "Marca Comercial": find(["marca comercial"]),
++        "Entidade Exploradora": find(["entidade exploradora"]),
++        "NIF / NIPC": find(["nif / nipc", "nif", "nipc"]),
++    }
++
++
++async def screenshot_diagnostic(page, response):
++    try:
++        await page.screenshot(path="diagnostic_screenshot.png", full_page=True)
++    except Exception:
++        pass
++    soup = BeautifulSoup(await page.content(), "html.parser")
++    status = response.status if response else 0
++    title = safe_title(soup)
++    log(f"No product records found: HTTP {status}, Title: '{title}', Screenshot: diagnostic_screenshot.png")
++
++
++async def scrape(args):
++    inputs = parse_input(args.input)
++    records = []
++    flags = []
++    categories_discovered = len(inputs)
++    links_discovered = 0
++    links_processed = 0
++    stop_all = False
++
++    async with async_playwright() as pw:
++        browser = await pw.chromium.launch(
++            headless=args.headless,
++            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"]
++        )
++        context = await browser.new_context(
++            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
++            viewport={"width": 1920, "height": 1080},
++        )
++        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
++        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
++        page = await context.new_page()
++
++        for item in inputs:
++            if args.max_products is not None and len(records) >= args.max_products:
++                break
++            detail_url = clean(item.get("detail_url"))
++            listing_url = clean(item.get("listing_url")) or TARGET_URL
++            keyword = clean(item.get("keyword"))
++            if detail_url:
++                detail_page = await context.new_page()
++                response, blocked = await goto_page(detail_page, detail_url, flags)
++                if blocked:
++                    stop_all = True
++                    await detail_page.close()
++                    break
++                fields = detail_fields(await detail_page.content())
++                match = re.search(r"[?&]nr=(\d+)", detail_url)
++                product_id = match.group(1) if match else fields.get("RNET nº", "")
++                record = {"product_id": product_id, "product_url": detail_url, "source_listing_url": "DIRECT_INPUT"}
++                record.update(fields)
++                records.append(record)
++                links_processed += 1
++                await detail_page.close()
++                continue
++
++            response, blocked = await goto_page(page, listing_url, flags)
++            if blocked:
++                stop_all = True
++                break
++            if keyword:
++                input_loc = page.locator("#RichWidgets_wt104_block_wtMainContent_wtInput_FiltroTexto")
++                try:
++                    clear_loc = page.locator("#RichWidgets_wt104_block_wtMainContent_wt22")
++                    if await clear_loc.is_visible(timeout=1000):
++                        await safe_click(page, clear_loc, "#RichWidgets_wt104_block_wtMainContent_wt22", flags, listing_url)
++                    await input_loc.fill("")
++                    await input_loc.fill(keyword)
++                    submit = page.locator("#RichWidgets_wt104_block_wtMainContent_wt201").or_(page.get_by_text("Pesquisar", exact=True)).first
++                    await safe_click(page, submit, "#RichWidgets_wt104_block_wtMainContent_wt201", flags, listing_url)
++                    await page.wait_for_selector("#RichWidgets_wt104_block_wtMainContent_wttrRegistos", timeout=20000)
++                    try:
++                        await page.wait_for_load_state("networkidle", timeout=10000)
++                    except PlaywrightTimeoutError:
++                        pass
++                except Exception as exc:
++                    flags.append({"Type": "Search Error", "URL": listing_url, "Message": str(exc)[:500]})
++                    continue
++
++            while True:
++                current_url = page.url
++                found = extract_listing_rows(await page.content(), current_url)
++                links_discovered += len(found)
++                if not found:
++                    if not records:
++                        await screenshot_diagnostic(page, response)
++                    if keyword:
++                        log(f"No results found for keyword: {keyword}")
++                    break
++                for listing in found:
++                    if args.max_products is not None and len(records) >= args.max_products:
++                        break
++                    detail_page = await context.new_page()
++                    detail_response, detail_blocked = await goto_page(detail_page, listing["product_url"], flags)
++                    if detail_blocked:
++                        stop_all = True
++                        await detail_page.close()
++                        break
++                    listing.update(detail_fields(await detail_page.content()))
++                    records.append(listing)
++                    links_processed += 1
++                    await detail_page.close()
++                if stop_all or (args.max_products is not None and len(records) >= args.max_products):
++                    break
++                next_loc = page.locator(".ListNavigation_Next").first
++                try:
++                    exists = await next_loc.count() > 0
++                    disabled = (await next_loc.get_attribute("aria-disabled")) == "true"
++                    classes = (await next_loc.get_attribute("class") or "").lower()
++                    if not exists or not await next_loc.is_visible() or disabled or "disabled" in classes:
++                        break
++                    before = current_url
++                    if not await safe_click(page, next_loc, ".ListNavigation_Next", flags, current_url):
++                        break
++                    await page.wait_for_selector("#RichWidgets_wt104_block_wtMainContent_wttrRegistos", timeout=20000)
++                    try:
++                        await page.wait_for_load_state("networkidle", timeout=10000)
++                    except PlaywrightTimeoutError:
++                        pass
++                    if page.url == before:
++                        await asyncio.sleep(1)
++                except Exception as exc:
++                    flags.append({"Type": "Pagination Error", "URL": current_url, "Message": str(exc)[:500]})
++                    break
++        await browser.close()
++
++    required = ("product_id", "product_url", "source_listing_url")
++    for record in records:
++        for field in required:
++            if not clean(record.get(field)):
++                flags.append({"Type": "Missing Field", "URL": record.get("product_url", ""), "Message": field})
++        for field in ("Nome", "Tipologia", "Marca Comercial"):
++            if field in record and not clean(record.get(field)):
++                flags.append({"Type": "Low-confidence extraction", "URL": record.get("product_url", ""), "Message": f"Missing {field}"})
++
++    log(f"Crawl Funnel: {categories_discovered} categories, {links_discovered} links discovered, {links_processed} processed, {len(records)} extracted.")
++    output_records = [{key: sanitize_cell_value(value) for key, value in record.items()} for record in records]
++    flag_records = [{key: sanitize_cell_value(value) for key, value in flag.items()} for flag in flags]
++    with pd.ExcelWriter(args.output, engine="openpyxl") as writer:
++        pd.DataFrame(output_records).to_excel(writer, sheet_name="Extracted Data", index=False)
++        pd.DataFrame(flag_records, columns=["Type", "URL", "Message"]).to_excel(writer, sheet_name="Flags", index=False)
++    if stop_all:
++        return
++    if not records:
++        log("ERROR: Zero product records were extracted. Aborting.")
++        sys.exit(1)
++
++
++def main():
++    parser = argparse.ArgumentParser(description="Scrape Portugal RNET accommodation listings.")
++    parser.add_argument("--input", default="input.xlsx")
++    parser.add_argument("--output", default="output.xlsx")
++    parser.add_argument("--max-products", type=int, default=None)
++    parser.add_argument("--headless", action=argparse.BooleanOptionalAction, default=True)
++    parser.add_argument("--mask-reviews", action=argparse.BooleanOptionalAction, default=True)
++    args = parser.parse_args()
++    asyncio.run(scrape(args))
++
++
++if __name__ == "__main__":
++    main()

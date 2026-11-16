@@ -1,0 +1,541 @@
+--- attempt_1.py
++++ attempt_2.py
+@@ -1,6 +1,7 @@
+ import argparse
+ import asyncio
+ import json
++import os
+ import re
+ import sys
+ from datetime import datetime
+@@ -11,7 +12,13 @@
+ from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+ 
+ TARGET_URL = "https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx"
+-BASE_URL = "https://rnt.turismodeportugal.pt/RNT/"
++LISTING_TABLE = "#RichWidgets_wt104_block_wtMainContent_wttrRegistos"
++SEARCH_INPUT = "#RichWidgets_wt104_block_wtMainContent_wtInput_FiltroTexto"
++SEARCH_BUTTON = "#RichWidgets_wt104_block_wtMainContent_wt201"
++CLEAR_BUTTON = "#RichWidgets_wt104_block_wtMainContent_wt22"
++NEXT_BUTTON = ".ListNavigation_Next"
++DETAIL_TABLE = "#RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento"
++
+ WAF_MARKERS = (
+     "cloudflare turnstile", "cf-browser-verification", "ray id:", "just a moment...",
+     "datadome", "perimeterx", "px-captcha", "distil networks", "press & hold",
+@@ -20,6 +27,13 @@
+     "potential security risk", "detected automated scripts", "additional security check",
+     "i am human", "hcaptcha", "access denied", "robot or human"
+ )
++
++OUTPUT_COLUMNS = [
++    "product_id", "product_url", "source_listing_url", "Nº", "Data", "Nome",
++    "Tipologia", "Capacidade", "Localização", "Certificações", "RNET nº",
++    "Data de Registo", "Tipologia Completa", "Morada e Código Postal", "Contactos",
++    "Marca Comercial", "Entidade Exploradora", "NIF / NIPC"
++]
+ 
+ 
+ def log(message):
+@@ -46,51 +60,45 @@
+             return ""
+     except (TypeError, ValueError):
+         pass
+-    text = str(val).strip()
+-    if text.lower() in {"nan", "none", "null"}:
+-        return ""
+-    return text
++    value = str(val).replace("\xa0", " ").strip()
++    return "" if value.lower() in {"nan", "none", "null"} else value
++
++
++def norm(value):
++    return re.sub(r"[^a-z0-9]+", " ", clean(value).lower()).strip()
+ 
+ 
+ def safe_title(soup):
+-    return ((soup.title.get_text(strip=True) if getattr(soup, "title", None) else "") if getattr(soup, "title", None) else "") if getattr(soup, "title", None) else ""
+-
+-
+-def mask_reviewer_pii(text):
+-    if not text:
+-        return ""
+-    text = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "***@***.***", text)
+-
+-    def mask_name(match):
+-        words = match.group(0).split()
+-        return " ".join((word[0] + "***" if len(word) > 1 else word) for word in words[:-1]) + " " + words[-1][0] + "."
+-
+-    return re.sub(r"\b[A-ZÀ-Ý][a-zà-ÿ]+\s+[A-ZÀ-Ý][a-zà-ÿ]+\b", mask_name, text)
++    return (soup.title.get_text(strip=True) if getattr(soup, "title", None) else "") if getattr(soup, "title", None) else ""
+ 
+ 
+ def parse_input(path):
+-    input_df = pd.read_excel(path, header=None).fillna("")
+-    if input_df.empty:
+-        return []
+-    first = [clean(v).lower() for v in input_df.iloc[0].tolist()]
+-    known = {"keyword", "listing_url", "detail_url"}
+-    has_header = bool(set(first) & known)
++    sheets = pd.read_excel(path, sheet_name=None, header=None)
++    sheets = {name: frame.fillna("") for name, frame in sheets.items()}
++    frame = next(iter(sheets.values()), pd.DataFrame())
++    if frame.empty:
++        return [], sheets
++
++    first = [clean(v).lower() for v in frame.iloc[0].tolist()]
++    header_names = {"keyword", "listing_url", "detail_url"}
++    is_header = bool(set(first) & header_names)
+     rows = []
+-    if has_header:
+-        positions = {name: first.index(name) for name in known if name in first}
+-        data = input_df.iloc[1:]
+-        for _, row in data.iterrows():
+-            rows.append({name: clean(row.iloc[pos]) for name, pos in positions.items()})
+-    else:
+-        for _, row in input_df.iterrows():
+-            values = [clean(v) for v in row.tolist()]
++    start = 1 if is_header else 0
++    positions = {name: first.index(name) for name in header_names if name in first} if is_header else {}
++
++    for _, row in frame.iloc[start:].iterrows():
++        values = [clean(v) for v in row.tolist()]
++        if is_header:
++            item = {name: clean(row.iloc[pos]) for name, pos in positions.items()}
++        else:
+             item = {"keyword": values[0] if values else ""}
+             if len(values) > 1:
+                 item["listing_url"] = values[1]
+             if len(values) > 2:
+                 item["detail_url"] = values[2]
++        if any(clean(v) for v in item.values()):
+             rows.append(item)
+-    return [row for row in rows if any(clean(v) for v in row.values())]
++    return rows, sheets
+ 
+ 
+ async def dismiss_cookie_banner(page):
+@@ -104,7 +112,7 @@
+                 await loc.click(timeout=1500)
+                 return
+         except Exception:
+-            continue
++            pass
+ 
+ 
+ async def detect_anti_bot_signals(page, response, flags, url):
+@@ -143,7 +151,8 @@
+         return True
+     except Exception as exc:
+         log(f"Click blocked on locator '{selector}': {exc}")
+-        flags.append({"Type": "Click Intercepted", "URL": url, "Message": f"Element {selector} blocked: {str(exc)[:200]}"})
++        flags.append({"Type": "Click Intercepted", "URL": url,
++                      "Message": f"Element {selector} blocked: {str(exc)[:200]}"})
+         try:
+             await page.keyboard.press("Escape")
+             await locator.click(timeout=3000)
+@@ -154,79 +163,117 @@
+                 return True
+             except Exception as fallback_exc:
+                 log(f"Click fallback failed: {fallback_exc}")
++                flags.append({"Type": "Click Error", "URL": url, "Message": str(fallback_exc)[:500]})
+                 return False
+ 
+ 
+-def row_value(row, index):
+-    return clean(row[index]) if index < len(row) else ""
+-
+-
+-def extract_listing_rows(html, current_url):
++async def wait_for_results(page, previous_signature=""):
++    await page.wait_for_selector(LISTING_TABLE, timeout=20000)
++    try:
++        await page.wait_for_function(
++            """([table, previous]) => {
++                const node = document.querySelector(table);
++                if (!node) return false;
++                const rows = [...node.querySelectorAll('tr')].filter(r => r.querySelector("a[href*='RNET.aspx?nr=']"));
++                const text = document.body.innerText || '';
++                const counter = /\\d+\\s+a\\s+\\d+\\s+de\\s+\\d+\\s+registos/i.test(text);
++                const signature = rows.map(r => r.innerText).join('|');
++                return rows.length > 0 && (counter || !previous || signature !== previous);
++            }""",
++            [LISTING_TABLE, previous_signature], timeout=20000
++        )
++    except PlaywrightTimeoutError:
++        pass
++    try:
++        await page.wait_for_load_state("networkidle", timeout=10000)
++    except PlaywrightTimeoutError:
++        pass
++
++
++def extract_listing_rows(html, source_url):
+     soup = BeautifulSoup(html, "html.parser")
+-    table = soup.select_one("#RichWidgets_wt104_block_wtMainContent_wttrRegistos")
++    table = soup.select_one(LISTING_TABLE)
+     if not table:
+         return []
++
++    header_map = {}
++    header = table.select_one("tr:has(th)")
++    if header:
++        for index, cell in enumerate(header.select("th, td")):
++            key = norm(cell.get_text(" ", strip=True))
++            if key:
++                header_map[key] = index
++
+     results = []
+     for tr in table.select("tr"):
++        link = tr.select_one("a[href*='RNET.aspx?nr=']")
+         cells = [cell.get_text(" ", strip=True) for cell in tr.select("td")]
+-        link = tr.select_one("a[href*='RNET.aspx?nr=']")
+-        if not cells or not link:
++        if not link or not cells:
+             continue
+-        href = urljoin(current_url, link.get("href", ""))
+-        match = re.search(r"[?&]nr=(\d+)", href)
+-        product_id = match.group(1) if match else row_value(cells, 0)
++        href = urljoin(source_url, link.get("href", ""))
++        match = re.search(r"[?&]nr=(\d+)", href, re.I)
++        if not match:
++            continue
++        product_id = match.group(1)
++
++        def value(label, fallback):
++            index = header_map.get(norm(label))
++            if index is not None and index < len(cells):
++                return clean(cells[index])
++            return clean(cells[fallback]) if fallback < len(cells) else ""
++
+         results.append({
+             "product_id": product_id,
+             "product_url": href,
+-            "source_listing_url": current_url,
+-            "Nº": row_value(cells, 0),
+-            "Data": row_value(cells, 1),
+-            "Nome": row_value(cells, 2),
+-            "Tipologia": row_value(cells, 3),
+-            "Capacidade": row_value(cells, 4),
+-            "Localização": row_value(cells, 5),
+-            "Certificações": row_value(cells, 6),
++            "source_listing_url": TARGET_URL,
++            "Nº": value("Nº", 0),
++            "Data": value("Data", 1),
++            "Nome": value("Nome", 2),
++            "Tipologia": value("Tipologia", 3),
++            "Capacidade": value("Capacidade", 4),
++            "Localização": value("Localização", 5),
++            "Certificações": value("Certificações", 6),
+         })
+     return results
+ 
+ 
+ def detail_fields(html):
+     soup = BeautifulSoup(html, "html.parser")
++    table = soup.select_one(DETAIL_TABLE) or soup
+     pairs = {}
+-    for tr in soup.select("tr"):
+-        cells = [c.get_text(" ", strip=True) for c in tr.select("th, td")]
+-        if len(cells) >= 2:
+-            key = re.sub(r"\s+", " ", cells[0]).strip(" :")
+-            value = " ".join(cells[1:]).strip()
+-            if key and value:
+-                pairs[key.lower()] = value
++    for tr in table.select("tr"):
++        cells = [clean(c.get_text(" ", strip=True)) for c in tr.select("th, td")]
++        if len(cells) >= 2 and cells[0]:
++            pairs[norm(cells[0])] = clean(" ".join(cells[1:]))
++
+     full = soup.get_text("\n", strip=True)
+ 
+-    def find(label_patterns):
++    def find(labels):
++        labels = [norm(label) for label in labels]
+         for key, value in pairs.items():
+-            if any(pattern in key for pattern in label_patterns):
++            if any(label == key or label in key for label in labels):
+                 return value
+-        for pattern in label_patterns:
+-            match = re.search(r"" + re.escape(pattern) + r"\s*:?\s*([^\n]+)", full, re.I)
++        for label in labels:
++            match = re.search(re.escape(label).replace("\\ ", r"\s+") + r"\s*:?\s*([^\n]+)", full, re.I)
+             if match:
+-                return match.group(1).strip()
++                return clean(match.group(1))
+         return ""
+ 
+-    rnet = find(["rnet nº", "rnet n", "rnet"])
+-    number_match = re.search(r"\b(\d+)\b", rnet) if rnet else re.search(r"RNET\s*n[ºo]?\s*[:\-]?\s*(\d+)", full, re.I)
++    heading_match = re.search(r"RNET\s*n[ºo]?\s*[:\-]?\s*(\d+)", full, re.I)
++    rnet = heading_match.group(1) if heading_match else find(["RNET nº", "RNET n", "RNET"])
+     return {
+-        "RNET nº": number_match.group(1) if number_match else rnet,
+-        "Data de Registo": find(["data de registo", "registado em"]),
+-        "Tipologia Completa": find(["tipologia completa", "tipologia"]),
+-        "Morada e Código Postal": find(["morada e código postal", "morada", "código postal"]),
+-        "Contactos": find(["contactos", "contacto"]),
+-        "Marca Comercial": find(["marca comercial"]),
+-        "Entidade Exploradora": find(["entidade exploradora"]),
+-        "NIF / NIPC": find(["nif / nipc", "nif", "nipc"]),
++        "RNET nº": rnet,
++        "Data de Registo": find(["Data de Registo", "Registado em"]),
++        "Tipologia Completa": find(["Tipologia Completa", "Tipologia"]),
++        "Morada e Código Postal": find(["Morada e Código Postal", "Morada", "Código Postal"]),
++        "Contactos": find(["Contactos", "Contacto"]),
++        "Marca Comercial": find(["Marca Comercial"]),
++        "Entidade Exploradora": find(["Entidade Exploradora"]),
++        "NIF / NIPC": find(["NIF / NIPC", "NIF", "NIPC"]),
+     }
+ 
+ 
+-async def screenshot_diagnostic(page, response):
++async def diagnostic_screenshot(page, response):
+     try:
+         await page.screenshot(path="diagnostic_screenshot.png", full_page=True)
+     except Exception:
+@@ -238,13 +285,14 @@
+ 
+ 
+ async def scrape(args):
+-    inputs = parse_input(args.input)
+-    records = []
+-    flags = []
++    inputs, input_sheets = parse_input(args.input)
++    records, flags = [], []
+     categories_discovered = len(inputs)
+     links_discovered = 0
+     links_processed = 0
+-    stop_all = False
++    blocked = False
++    page = None
++    last_response = None
+ 
+     async with async_playwright() as pw:
+         browser = await pw.chromium.launch(
+@@ -253,126 +301,148 @@
+         )
+         context = await browser.new_context(
+             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+-            viewport={"width": 1920, "height": 1080},
++            viewport={"width": 1920, "height": 1080}
+         )
+         await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
+-        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
+-        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
++        await context.add_init_script(
++            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined}); window.chrome = {runtime: {}};"
++        )
+         page = await context.new_page()
+ 
+         for item in inputs:
+             if args.max_products is not None and len(records) >= args.max_products:
+                 break
+-            detail_url = clean(item.get("detail_url"))
++            direct_url = clean(item.get("detail_url"))
++            keyword = clean(item.get("keyword"))
+             listing_url = clean(item.get("listing_url")) or TARGET_URL
+-            keyword = clean(item.get("keyword"))
+-            if detail_url:
++
++            if direct_url:
+                 detail_page = await context.new_page()
+-                response, blocked = await goto_page(detail_page, detail_url, flags)
+-                if blocked:
+-                    stop_all = True
++                try:
++                    response, is_blocked = await goto_page(detail_page, direct_url, flags)
++                    if is_blocked:
++                        blocked = True
++                        break
++                    match = re.search(r"[?&]nr=(\d+)", direct_url, re.I)
++                    fields = detail_fields(await detail_page.content())
++                    product_id = match.group(1) if match else clean(fields.get("RNET nº"))
++                    if product_id:
++                        record = {"product_id": product_id, "product_url": direct_url,
++                                  "source_listing_url": "DIRECT_INPUT"}
++                        record.update(fields)
++                        records.append(record)
++                        links_processed += 1
++                finally:
+                     await detail_page.close()
+-                    break
+-                fields = detail_fields(await detail_page.content())
+-                match = re.search(r"[?&]nr=(\d+)", detail_url)
+-                product_id = match.group(1) if match else fields.get("RNET nº", "")
+-                record = {"product_id": product_id, "product_url": detail_url, "source_listing_url": "DIRECT_INPUT"}
+-                record.update(fields)
+-                records.append(record)
+-                links_processed += 1
+-                await detail_page.close()
+                 continue
+ 
+-            response, blocked = await goto_page(page, listing_url, flags)
+-            if blocked:
+-                stop_all = True
++            last_response, is_blocked = await goto_page(page, listing_url, flags)
++            if is_blocked:
++                blocked = True
+                 break
++
+             if keyword:
+-                input_loc = page.locator("#RichWidgets_wt104_block_wtMainContent_wtInput_FiltroTexto")
+                 try:
+-                    clear_loc = page.locator("#RichWidgets_wt104_block_wtMainContent_wt22")
+-                    if await clear_loc.is_visible(timeout=1000):
+-                        await safe_click(page, clear_loc, "#RichWidgets_wt104_block_wtMainContent_wt22", flags, listing_url)
+-                    await input_loc.fill("")
+-                    await input_loc.fill(keyword)
+-                    submit = page.locator("#RichWidgets_wt104_block_wtMainContent_wt201").or_(page.get_by_text("Pesquisar", exact=True)).first
+-                    await safe_click(page, submit, "#RichWidgets_wt104_block_wtMainContent_wt201", flags, listing_url)
+-                    await page.wait_for_selector("#RichWidgets_wt104_block_wtMainContent_wttrRegistos", timeout=20000)
+-                    try:
+-                        await page.wait_for_load_state("networkidle", timeout=10000)
+-                    except PlaywrightTimeoutError:
+-                        pass
++                    clear = page.locator(CLEAR_BUTTON).first
++                    if await clear.count() and await clear.is_visible(timeout=1000):
++                        await safe_click(page, clear, CLEAR_BUTTON, flags, listing_url)
++                    search = page.locator(SEARCH_INPUT)
++                    await search.fill("")
++                    await search.fill(keyword)
++                    button = page.locator(SEARCH_BUTTON).first
++                    if not await safe_click(page, button, SEARCH_BUTTON, flags, listing_url):
++                        continue
++                    await wait_for_results(page)
++                    if await detect_anti_bot_signals(page, None, flags, page.url):
++                        blocked = True
++                        break
+                 except Exception as exc:
+                     flags.append({"Type": "Search Error", "URL": listing_url, "Message": str(exc)[:500]})
+                     continue
+ 
++            keyword_had_rows = False
++            seen_pages = set()
+             while True:
+-                current_url = page.url
+-                found = extract_listing_rows(await page.content(), current_url)
+-                links_discovered += len(found)
+-                if not found:
+-                    if not records:
+-                        await screenshot_diagnostic(page, response)
+-                    if keyword:
++                html = await page.content()
++                found = extract_listing_rows(html, listing_url)
++                signature = "|".join(row["product_id"] for row in found)
++                if not found or signature in seen_pages:
++                    if not keyword_had_rows and not records:
++                        await diagnostic_screenshot(page, last_response)
++                    if keyword and not keyword_had_rows:
+                         log(f"No results found for keyword: {keyword}")
+                     break
++                seen_pages.add(signature)
++                keyword_had_rows = True
++                links_discovered += len(found)
++
+                 for listing in found:
+                     if args.max_products is not None and len(records) >= args.max_products:
+                         break
+                     detail_page = await context.new_page()
+-                    detail_response, detail_blocked = await goto_page(detail_page, listing["product_url"], flags)
+-                    if detail_blocked:
+-                        stop_all = True
++                    try:
++                        response, is_blocked = await goto_page(detail_page, listing["product_url"], flags)
++                        if is_blocked:
++                            blocked = True
++                            break
++                        listing.update(detail_fields(await detail_page.content()))
++                        records.append(listing)
++                        links_processed += 1
++                    finally:
+                         await detail_page.close()
+-                        break
+-                    listing.update(detail_fields(await detail_page.content()))
+-                    records.append(listing)
+-                    links_processed += 1
+-                    await detail_page.close()
+-                if stop_all or (args.max_products is not None and len(records) >= args.max_products):
++                if blocked or (args.max_products is not None and len(records) >= args.max_products):
+                     break
+-                next_loc = page.locator(".ListNavigation_Next").first
++
++                next_link = page.locator(NEXT_BUTTON).first
+                 try:
+-                    exists = await next_loc.count() > 0
+-                    disabled = (await next_loc.get_attribute("aria-disabled")) == "true"
+-                    classes = (await next_loc.get_attribute("class") or "").lower()
+-                    if not exists or not await next_loc.is_visible() or disabled or "disabled" in classes:
+-                        break
+-                    before = current_url
+-                    if not await safe_click(page, next_loc, ".ListNavigation_Next", flags, current_url):
+-                        break
+-                    await page.wait_for_selector("#RichWidgets_wt104_block_wtMainContent_wttrRegistos", timeout=20000)
+-                    try:
+-                        await page.wait_for_load_state("networkidle", timeout=10000)
+-                    except PlaywrightTimeoutError:
+-                        pass
+-                    if page.url == before:
+-                        await asyncio.sleep(1)
++                    if not await next_link.count() or not await next_link.is_visible():
++                        break
++                    aria_disabled = (await next_link.get_attribute("aria-disabled") or "").lower()
++                    classes = (await next_link.get_attribute("class") or "").lower()
++                    if aria_disabled == "true" or "disabled" in classes:
++                        break
++                    before = signature
++                    if not await safe_click(page, next_link, NEXT_BUTTON, flags, page.url):
++                        break
++                    await wait_for_results(page, before)
+                 except Exception as exc:
+-                    flags.append({"Type": "Pagination Error", "URL": current_url, "Message": str(exc)[:500]})
++                    flags.append({"Type": "Pagination Error", "URL": page.url, "Message": str(exc)[:500]})
+                     break
++
+         await browser.close()
+ 
+-    required = ("product_id", "product_url", "source_listing_url")
+     for record in records:
+-        for field in required:
++        for field in ("product_id", "product_url", "source_listing_url"):
+             if not clean(record.get(field)):
+                 flags.append({"Type": "Missing Field", "URL": record.get("product_url", ""), "Message": field})
+         for field in ("Nome", "Tipologia", "Marca Comercial"):
+-            if field in record and not clean(record.get(field)):
++            if not clean(record.get(field)):
+                 flags.append({"Type": "Low-confidence extraction", "URL": record.get("product_url", ""), "Message": f"Missing {field}"})
+ 
+     log(f"Crawl Funnel: {categories_discovered} categories, {links_discovered} links discovered, {links_processed} processed, {len(records)} extracted.")
+-    output_records = [{key: sanitize_cell_value(value) for key, value in record.items()} for record in records]
+-    flag_records = [{key: sanitize_cell_value(value) for key, value in flag.items()} for flag in flags]
+-    with pd.ExcelWriter(args.output, engine="openpyxl") as writer:
+-        pd.DataFrame(output_records).to_excel(writer, sheet_name="Extracted Data", index=False)
+-        pd.DataFrame(flag_records, columns=["Type", "URL", "Message"]).to_excel(writer, sheet_name="Flags", index=False)
+-    if stop_all:
+-        return
++    write_output(args.output, input_sheets, records, flags)
++    if blocked:
++        sys.exit(2)
+     if not records:
+         log("ERROR: Zero product records were extracted. Aborting.")
+         sys.exit(1)
++
++
++def write_output(path, source_sheets, records, flags):
++    sheets = dict(source_sheets)
++    sheets["Extracted Data"] = pd.DataFrame(
++        [{column: sanitize_cell_value(record.get(column, "")) for column in OUTPUT_COLUMNS} for record in records],
++        columns=OUTPUT_COLUMNS
++    )
++    sheets["Flags"] = pd.DataFrame(
++        [{"Type": sanitize_cell_value(flag.get("Type", "")),
++          "URL": sanitize_cell_value(flag.get("URL", "")),
++          "Message": sanitize_cell_value(flag.get("Message", ""))} for flag in flags],
++        columns=["Type", "URL", "Message"]
++    )
++    with pd.ExcelWriter(path, engine="openpyxl") as writer:
++        for name, frame in sheets.items():
++            frame.fillna("").to_excel(writer, sheet_name=str(name)[:31], index=False, header=True)
+ 
+ 
+ def main():

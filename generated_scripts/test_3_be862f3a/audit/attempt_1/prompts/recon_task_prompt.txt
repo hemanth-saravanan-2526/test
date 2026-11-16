@@ -1,0 +1,86 @@
+You are inspecting a live website to gather the facts needed to build a
+Python web scraper. YOU DO NOT WRITE ANY CODE IN THIS PHASE - a separate
+step handles code generation from the findings you report here. Your only
+output is a compact JSON findings object.
+
+TARGET: https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+Sample keyword to test with: a
+
+The target above may be a listing/search page OR a single item's detail page -
+figure out which by looking at what actually renders, don't assume either way.
+
+RULES (as described by the requester, in plain language):
+- Search rules: * Read search keywords sequentially from Column A of the attached input Excel file. The file has NO header row, so treat the very first row as valid search data (use header=None).
+* For each keyword:
+  1. If the input box contains text from a previous search, clear it completely or click the "Limpar" button.
+  2. Type the keyword into the "Empreendimento Nome/Marca" text box (selector matching wtInput_FiltroTexto).
+  3. Click the green "Pesquisar" button (matching wt201 or button with text 'Pesquisar').
+  4. Wait for the AJAX postback to update the DOM: wait for network idle and ensure the table rows (table tr:has(td)) and counter (e.g., "1 a 10 de ... registos") have loaded.
+  5. If 0 records are found for a keyword, log "No results found for keyword" and move directly to the next keyword from the input file.
+- Filter rules: * Ignore table header rows (th) and empty spacer rows.
+* Only process valid accommodation rows that contain a detail link matching href*='RNET.aspx?nr='.
+* Clean all extracted text by stripping leading/trailing whitespace and replacing non-breaking spaces (\xa0) with regular spaces.
+- Navigation rules: * For each listing row on the current search results page:
+  1. Extract the listing row data.
+  2. Locate the detail page link (the '+' icon / registration number link with href*='RNET.aspx?nr=').
+  3. Open the detail page URL in a separate browser tab (context.new_page()), extract all detail fields, and close that tab. This preserves the search listing state and pagination position without reloading the search page.
+* Pagination:
+  1. After processing all 10 rows on the current page, locate the "próximo" pagination link (.ListNavigation_Next).
+  2. If the "próximo" link exists, is visible, and is not disabled (aria-disabled != 'true' and no 'disabled' class):
+     - Click "próximo".
+     - Wait for the AJAX update to complete (network idle and table row contents to change).
+     - Repeat extraction for the next 10 rows.
+  3. If "próximo" is absent, disabled, or if 0 rows are found on the page, stop pagination for this keyword.
+* Once all result pages for the current keyword are finished, proceed to the next keyword from Column A of the input file.
+- Extraction rules (data points to capture): Extract the following fields into the output Excel sheet:
+
+Listing Table Fields:
+* Nº: Registration number
+* Data: Registration date
+* Nome: Property / enterprise name
+* Tipologia: Accommodation category and star rating
+* Capacidade: Bed / guest capacity
+* Localização: Municipality / location
+* Certificações: Quality or sustainability certifications
+
+Detail Page Fields:
+* RNET nº: Number from the top heading
+* Data de Registo: Date appearing after "Registado em"
+* Tipologia Completa: Full classification description
+* Morada e Código Postal: Street address and postal code
+* Contactos: Phone numbers, email, and website
+* Marca Comercial: Commercial brand name
+* Entidade Exploradora: Operating entity / management company
+* NIF / NIPC: Tax / VAT number found under Entidade Exploradora
+Mask reviewer PII and skip review accordions.
+
+YOUR TASK (USING CUSTOM PLAYWRIGHT MCP TOOLBOX WITH IN-TOOL HEALING):
+1. Navigate to the target URL using `navigate(url)`.
+2. Take a `snapshot()` to inspect the real rendered structure (headings, product cards, interactive elements, JSON-LD).
+3. If search or filter interaction is required, use `type_text(selector, text, press_enter=...)` and `click(selector)`.
+   (Note: `click` automatically dismisses blocking cookie banners, overlays, and modals via in-tool healing).
+4. If testing catalog pagination or infinite scroll, use `load_all(item_selector=...)` to automatically test item growth.
+5. If you're on a listing page, identify the navigation path to detail pages and inspect a sample detail page.
+6. Stage observed sample rows using `save_items(sample_records=..., schema=..., item_selector=...)`.
+   (Note: `save_items` automatically checks for empty fields and re-evaluates selectors on the live DOM if any fields are blank).
+7. If the page is backed by an internal clean JSON/GraphQL API, record that endpoint.
+8. Do not attempt to solve CAPTCHAs or defeat anti-bot WAFs - if encountered, record the marker and halt immediately.
+
+Return your final answer as a single JSON object with exactly these keys
+(keep every value CONCISE - a few sentences or short bullet-style strings per
+key, not prose paragraphs):
+  "page_type"              - "listing" | "detail" | "both"
+  "cookie_banner"           - what was present (if anything) and how it was dismissed
+  "search_flow"             - how search/filter interaction actually works, if tested
+  "navigation_path"         - how to get from listing to detail pages
+  "listing_selectors"       - concrete selectors/patterns observed for listing items
+  "detail_selectors"        - concrete selectors/patterns observed on a detail page
+  "network_api"             - any clean JSON API endpoint observed, or "none observed"
+  "sample_extracted_fields" - a small sample of real values you actually saw, per
+                               the extraction rules above
+  "confidence_notes"        - list of strings, anything unverified or uncertain
+
+CRITICAL FORMATTING RULE: your final message must be ONLY that JSON object -
+no markdown code fences, no explanation before or after it, no prose of any
+kind outside the JSON, and no code. It must parse cleanly with Python's
+json.loads().

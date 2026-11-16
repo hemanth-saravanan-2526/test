@@ -1,0 +1,244 @@
+You are writing a complete Python web scraper based on a prior live-site
+inspection. You do NOT have browser access in this step - work only from the
+inspection findings below and the requester's rules. Where the findings are
+thin or uncertain, say so explicitly in confidence_notes instead of
+inventing selectors or behavior you weren't shown.
+
+TARGET: https://rnt.turismodeportugal.pt/RNT/Pesquisa_ET.aspx
+
+INSPECTION FINDINGS (gathered during a live browser session, prior step):
+{
+  "page_type": "both",
+  "cookie_banner": "None observed; no dismissal needed.",
+  "search_flow": "ASP.NET postback form. Type into #RichWidgets_wt104_block_wtMainContent_wtInput_FiltroTexto (placeholder 'Empreendimento Nome/Marca'), click #RichWidgets_wt104_block_wtMainContent_wt201 ('Pesquisar'), wait for table/counter. Clear with #RichWidgets_wt104_block_wtMainContent_wt22 ('Limpar') before the next keyword. Keyword 'a' produced 1 a 10 de 1180 registos.",
+  "navigation_path": "Each result row has a plus link to RNET.aspx?nr={registration}; observed href RNET.aspx?nr=13702. Open in a new tab, extract, then return to listing. Pagination uses link #RichWidgets_wt104_block_wtMainContent_RichWidgets_wt11_block_wt28 with text 'pr\u00f3ximo'.",
+  "listing_selectors": "Table #RichWidgets_wt104_block_wtMainContent_wttrRegistos; data rows tr.TableRecords_OddLine/tr.TableRecords_EvenLine; detail links a[id$='_wt190'][href*='RNET.aspx?nr=']; counter .Counter_Message; next link .ListNavigation_Next. Cells are ordered N\u00ba, Data, Nome, Tipologia, Capacidade, Localiza\u00e7\u00e3o, Certifica\u00e7\u00f5es, detalhe. Stars are .fa-star.",
+  "detail_selectors": "Detail record table #RichWidgets_wt13_block_wtMainContent_wt15_wtShowEmprreendimento; page heading text contains 'RNET n\u00ba' and 'Registado em'. Rows use label/value pairs for Tipologia, Nome, Localiza\u00e7\u00e3o, Contactos, Marca comercial. Website link #RichWidgets_wt13_block_wtMainContent_wt15_wt247. Operating data appears in text section 'Explora\u00e7\u00e3o e Propriet\u00e1rio', including 'Entidade exploradora' and NIF/NIPC.",
+  "network_api": "none observed; server-rendered ASP.NET form with postbacks and __OSVSTATE.",
+  "sample_extracted_fields": "Listing: 13702 | 2026-10-20 | CASA DO PADRE | Casa de campo | 4 | Melga\u00e7o | -; 13700 | 2026-10-19 | AUGUSTA GRAND HOTEL | Hotel, 3 estrelas | 51 | Lisboa | -. Detail 13702: RNET 13702; registado 2026-10-20; EMPREENDIMENTO DE TURISMO NO ESPA\u00c7O RURAL | CASA DE CAMPO; Turismo de Aldeia; Aldeia de Pontes, 4960-080 CASTRO LABOREIRO, Melga\u00e7o, Viana do Castelo; 939508465, aldeiadepontes@gmail.com, www.aldeiadepontes.com; marca Aldeia de Pontes; entidade exploradora SARA DOMINGUES; NIF/NIPC 123680956.",
+  "confidence_notes": [
+    "Search, first result page, counter, row structure, detail navigation, and one detail page were verified.",
+    "Pagination link was identified but next-page extraction was not executed.",
+    "Only two sample listing rows were staged; all 10 rows and all detail pages were not inspected.",
+    "PII masking/review-accordion handling was not tested; observed detail contained a named operating entity and phone/email contact.",
+    "No CAPTCHA, cookie banner, or anti-bot block observed."
+  ]
+}
+
+RULES (as described by the requester, in plain language):
+- Search rules: Read Inputs: Read each search keyword one by one from Column A of input.xlsx (treat the first row as data if there is no column header).
+Search Field: Type the keyword into the "Empreendimento Nome/Marca" text box.
+Submit: Click the green "Pesquisar" button.
+Wait: Wait until the results table and record count (e.g., "1 a 10 de ... registos") finish loading before proceeding.
+Reset for Next Input: When moving to the next keyword, clear the search text box or click "Limpar" before typing the new keyword.
+- Filter rules: none specified
+- Navigation rules: Process Listings: On the current search results page, open and extract the detail page data for all 10 listings one by one.
+Paginate: After extracting all listings on the current page, check the pagination at the bottom. If the "próximo" link is available and active, click "próximo", wait for the next set of 10 rows to load, and repeat the extraction.
+Next Keyword: Once all result pages for the current search keyword are completed, return to the search form, clear the input box, enter the next keyword from input.xlsx, and repeat the entire workflow.
+- Extraction rules (data points to capture): List Page Data: From the results table on every page, extract:
+
+Nº (Registration number)
+Data (Registration date)
+Nome (Property name)
+Tipologia (Accommodation type and stars)
+Capacidade (Number shown under the bed icon)
+Localização (Location / municipality)
+Certificações (Quality or sustainability certification)
+
+Detail Page Data: Click the + icon next to each listing (open in a new tab to avoid losing your place) and extract:
+
+RNET nº (Located in the top heading)
+Data de Registo (Date after "Registado em")
+Tipologia Completa (Full property category)
+Morada e Código Postal (Street address, postal code, and municipality)
+Contactos (Phone number, email, and website)
+Marca Comercial (Brand or commercial name)
+Entidade Exploradora (Operating company name)
+NIF / NIPC (VAT / tax number found under "Entidade exploradora")
+Mask reviewer PII and skip review accordions.
+
+Use requests+BeautifulSoup for static/API-backed content per the findings'
+"network_api" field when present, and a browser-based approach (noted
+clearly in the delivered script) where the findings indicate the page
+requires JS rendering.
+
+- REGEX & STRING ESCAPING (CRITICAL):
+  When writing regex patterns, use standard Python raw string literals with single backslashes,
+  e.g. r"\d3", r"\s+", r"\b", r"\([2-9]\d2\)". Never double-escape backslashes in raw strings
+  (do NOT write r"\\d+" or r"\\("). Use "\n" for get_text separator and "\xa0" for non-breaking spaces.
+
+MANDATORY SCRIPT CONTRACT - every scraper you write MUST follow this exact
+shape, regardless of the target site. This is not optional or per-job -
+every script this service produces must be a drop-in replacement for any
+other, so a person running it never has to read the code first to figure
+out how to call it:
+
+  - Command-line args via argparse:
+      `--input` (default "input.xlsx"),
+      `--output` (default "output.xlsx"),
+      `--max-products` (optional int cap),
+      `--headless` (default True, flag to run browser headless or visible),
+      `--mask-reviews` (default True, flag to mask reviewer PII and skip review accordions).
+
+  - Input Excel columns (any subset may be populated - handle all three):
+      `keyword`, `listing_url`, `detail_url` - semantics:
+      * `keyword`: triggers a search/match flow against the listing page or direct URL.
+      * `listing_url`: crawls a specific listing page (or falls back to default TARGET_URL).
+      * `detail_url`: scrapes one item page directly, skipping listing discovery.
+      * IMPORTANT: `detail_url` must be a genuinely independent fast path that extracts
+        the single page directly without requiring a listing crawl first.
+
+  - CANONICAL PRODUCT IDENTIFIERS & PROVENANCE URLS (MANDATORY SCHEMA):
+      Every extracted record MUST contain these three standardized columns:
+      1. `product_id`: Single deterministic primary key.
+         * Resolution hierarchy:
+           - Priority 1: Official SKU, model code, or MPN (e.g. from JSON-LD `sku`/`productID` or page metadata).
+           - Priority 2: Canonical URL slug / product ID extracted from the product URL via a consistent regex pattern.
+           - STRICT: Use the exact same ID strategy across all rows in the dataset; NEVER arbitrarily mix SKU for one product and URL slug for another.
+      2. `product_url`: Direct canonical URL of the product detail page.
+      3. `source_listing_url`: The category or listing URL from which the item was discovered (or "DIRECT_INPUT" if passed directly via input.xlsx detail_url).
+      * NOTE: Do NOT output a duplicate "Source URL" column that mirrors "product_url".
+
+  - STRICT ELEMENT-SCOPED PRICE EXTRACTION & NUMBER ISOLATION (CRITICAL):
+      * Prices MUST be extracted EXCLUSIVELY from within the product's primary pricing container
+        or buy box (e.g. `[itemprop="price"]`, `.price`, `.product-price`, `.current-price`, or JSON-LD `offers.price`).
+      * NEVER execute price regexes or digit extractors against product headings (`h1`, `h2`, `h3`, `.title`, `.product-name`),
+        description paragraphs, promo banners, or recommendation carousels (`.carousel`, `.recommendations`, `.related-products`).
+      * Title Digits Trap: Numbers in product titles (e.g., "250 North American Birds Sound Book") are NOT prices!
+      * Currency Anchoring: For text extraction, anchor to currency symbols or ISO codes:
+        e.g., `r'(?i)(?:[\$£€₹]|USD|CAD|EUR|GBP)\s*(\d{1,5}(?:[.,]\d{2})?)'`
+        Reject raw standalone numbers without currency indicators found in prose or headings.
+
+  - CRAWL FUNNEL TELEMETRY & LOUD FAILURE ON EMPTY:
+      * Scrapers must track and log crawl funnel metrics using `log()`:
+        `categories_discovered`, `links_discovered`, `links_processed`, `records_extracted`.
+        Example: `log(f"Crawl Funnel: {num_categories} categories, {num_links} links discovered, {num_processed} processed, {num_extracted} extracted.")`
+      * FAIL LOUDLY: If the crawl completes with 0 records extracted, the script MUST log:
+        `ERROR: Zero product records were extracted. Aborting.` and exit with `sys.exit(1)`.
+      * DIAGNOSTIC SCREENSHOT ON ZERO RECORDS: If 0 product records are found on the target listing/detail page,
+        take a full-page screenshot using Playwright saved to `diagnostic_screenshot.png`, capture the HTTP status code
+        and page `<title>`, and log: `log(f"No product records found: HTTP {status}, Title: '{title}', Screenshot: diagnostic_screenshot.png")`.
+
+  - EXCEL CELL LENGTH LIMIT PROTECTION (32,767 CHARACTERS):
+      * Excel cells corrupt or truncate if text exceeds 32,767 characters.
+      * Every script MUST define and use a `sanitize_cell_value(val, max_len=32000)` helper:
+        ```python
+        def sanitize_cell_value(val, max_len=32000):
+            if val is None:
+                return ""
+            if isinstance(val, (dict, list)):
+                s = json.dumps(val, ensure_ascii=False)
+            else:
+                s = str(val)
+            if len(s) > max_len:
+                return s[:max_len - 35] + "... [TRUNCATED_EXCEL_LIMIT]"
+            return s
+        ```
+      * Pass all field values through `sanitize_cell_value()` before exporting to DataFrame / Excel.
+
+  - CLICK INTERCEPTION & MODAL OVERLAY ERROR LOGGING:
+      * When clicks are blocked or intercepted by overlays/popups, catch the exception, log the real error:
+        `log(f"Click blocked on locator '{selector}': {exc}")`
+      * Record in Flags sheet: `{"Type": "Click Intercepted", "URL": url, "Message": f"Element {selector} blocked: {str(exc)[:200]}"}`
+      * Fallbacks: try pressing Escape (`await page.keyboard.press("Escape")`), dismiss modal overlays,
+        or dispatch JS click (`await locator.evaluate("el => el.click()")`).
+
+  - BOT PROTECTION FAST-FAIL (NO FUTILE RETRIES):
+      * In `detect_anti_bot_signals()`: If HTTP status is 403, 429, or page contains WAF challenge markers:
+        Always inspect both HTTP status and HTML text (lowercase). Include all enterprise and state WAF signatures:
+        markers = (
+            "cloudflare turnstile", "cf-browser-verification", "ray id:", "just a moment...",
+            "datadome", "perimeterx", "px-captcha", "distil networks", "press & hold",
+            "incapsula", "_incapsula_resource", "imperva", "incident id", "kasada",
+            "akamai", "shieldsquare", "security challenge", "pardon our interruption",
+            "potential security risk", "detected automated scripts", "additional security check",
+            "i am human", "hcaptcha", "access denied", "robot or human"
+        )
+        Classify as "Blocked by bot protection", log to Flags, and STOP RETRYING immediately. Exit cleanly with anti-bot status.
+
+  - SAFE PAGE TITLE & BEAUTIFULSOUP PARSING:
+      * Never call `.title.get_text()` without guarding against None:
+        `safe_title = soup.title.get_text(strip=True) if getattr(soup, "title", None) else ""`
+
+
+  - PERSONAL DATA & REVIEW ACCORDION FILTERING:
+      * When expanding accordions to discover specs, DO NOT click review accordions:
+        Skip any selector matching `[class*='review' i]`, `[id*='review' i]`, `button:has-text('Review')`, `button:has-text('Rating')`.
+      * If `--mask-reviews` is True (default) and review text is extracted:
+        Apply regex masking to reviewer names (`John Doe` -> `J*** D.`) and email addresses (`***@***.***`).
+
+  - OUTPUT EXCEL SHEETS (EXTENSIBLE CONTRACT):
+      * Must contain at least two sheets:
+        1. "Extracted Data": One row per item.
+        2. "Flags": One row per anti-bot signal, missing field, low-confidence extraction, or error.
+           Include entries if core fields (e.g. brand, category, price) are missing on a product.
+      * MULTI-SHEET EXTENSIBILITY: Scrapers may also write additional custom sheets if requested
+        (e.g., "Recommendations", "Variants", "Categories"). Repair agents and scripts MUST PRESERVE all custom sheets.
+
+  - CASCADE EXTRACTION STRATEGY:
+      1. Tier 1 (Internal JSON API): If observed during recon, query endpoint directly using requests/httpx.
+      2. Tier 2 (Hydrated State): Check for `<script id="__NEXT_DATA__">`, `<script id="__NUXT_DATA__">`,
+         `window.__INITIAL_STATE__`, or Schema.org JSON-LD blocks.
+      3. Tier 3 (Playwright Async Browser Automation): For modern JavaScript SPAs, client-rendered prices,
+         accordion spec tables, dynamic color/storage variants, and ASP.NET WebForms:
+         * Use `playwright.async_api.async_playwright()`.
+         * Launch Chromium with `--disable-blink-features=AutomationControlled`, `--no-sandbox`, and realistic User-Agent.
+         * Set viewport and inject stealth script immediately after creating context:
+           ```python
+           context = await browser.new_context(
+               user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+               viewport={"width": 1920, "height": 1080},
+           )
+           await context.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); window.chrome = { runtime: {} };")
+           ```
+         * Call `dismiss_cookie_banner(page)` immediately after `page.goto()`.
+         * Auto-wait for elements using `page.wait_for_selector()` or `page.locator()`.
+         * For ASP.NET / form submits that trigger navigation, wrap submits:
+           `async with page.expect_navigation(wait_until="domcontentloaded"): await submit_btn.click()`
+           or wait for the results grid directly after clicking.
+         * Click accordion tabs to reveal hidden specs (skipping review accordions).
+      4. Tier 4 (Static Fast-Path): For traditional server-rendered static HTML sites, use `requests`
+         with a desktop User-Agent and `BeautifulSoup`.
+
+  - Cookie & Consent Banner Dismissal:
+      Include a `dismiss_cookie_banner(page)` helper and call it once immediately after every `page.goto(...)`.
+
+  - Data Cleaning & Normalization:
+      * Clean currency/prices: extract clean formatted strings (e.g. "$24.99", "USD 120.00").
+      * Print timestamped log lines for each major step using a `log()` helper.
+
+  - REGEX & CODE SYNTAX RULES (CRITICAL):
+      * In raw strings (r"..." or r'...'), use SINGLE backslashes for regex tokens:
+        r"\d+", r"\s+", r"\b", r"\w+", r"\(?[2-9]\d{2}\)?", r"\.com".
+        NEVER double-escape inside raw strings (do NOT write r"\\d", r"\\s", r"\\b", r"\\(").
+      * When escaping literal parentheses in regex, use r"\(" and r"\)" (or re.escape).
+      * For HTML string cleaning with BeautifulSoup, use "\n" as separator and "\xa0" for non-breaking spaces.
+      * The script must be syntactically valid Python 3 and compile with zero errors.
+
+  - INPUT EXCEL & NAN HANDLING RULES (CRITICAL):
+      * When reading a single sheet from Excel with pandas:
+        `input_df = pd.read_excel(args.input).fillna("")`
+      * If reading multiple sheets with `sheet_name=None`, pandas returns a dict of DataFrames.
+        Apply `.fillna("")` to each DataFrame inside the dict:
+        `sheets = pd.read_excel(args.input, sheet_name=None)`
+        `sheets = {k: v.fillna("") for k, v in sheets.items()}`
+        `input_df = sheets.get("Extracted Data") or next(iter(sheets.values()), pd.DataFrame())`
+        NEVER call `.fillna("")` directly on the dict returned by `pd.read_excel(..., sheet_name=None)`!
+      * Any helper function (e.g. `clean()`, `value_from_row()`) MUST treat `pd.isna(val)`, `None`,
+        and the string `"nan"` / `"none"` / `"null"` as empty string `""`.
+      * NEVER allow `"nan"` to be treated as a valid `detail_url`, `listing_url`, or `keyword`.
+
+Return your final answer as a single JSON object with exactly these keys:
+  "generated_code"    - string, the full .py file, following the contract above
+  "requirements_txt"  - string, the exact pip-installable dependency list
+                         this specific script needs (only what it actually
+                         imports - do not copy a generic list)
+  "confidence_notes"  - list of strings (carry forward anything uncertain
+                         from the inspection findings, plus anything you
+                         had to assume while writing the code)
+
+CRITICAL FORMATTING RULE: your final message must be ONLY that JSON object -
+no markdown code fences (no ```json or ```), no explanation before or after
+it, no prose of any kind outside the JSON. It must parse cleanly with
+Python's json.loads(). Put any explanation you want to give INSIDE the JSON,
+in confidence_notes - never as text surrounding the JSON object.

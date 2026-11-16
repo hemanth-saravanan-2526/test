@@ -1,0 +1,15 @@
+{
+  "confidence_notes": [
+    "The site was identified as a classic ASP.NET/WebForms page with no observed API, so the script uses Playwright rather than requests for search, postback, pagination, and detail rendering.",
+    "The inspection verified the search input, submit control, listing table, detail-link pattern, and next-page selector, but pagination beyond the first page was not tested live.",
+    "The input inspection explicitly says there is no header row; the script treats the first column as keyword data and also supports an optional first-row header containing keyword, listing_url, and detail_url.",
+    "Listing column positions are assumed to follow the observed order: N\u00ba, Data, Nome, Tipologia, Capacidade, Localiza\u00e7\u00e3o, Certifica\u00e7\u00f5es.",
+    "Detail fields are extracted from label/value table rows and conservative text fallbacks because exact detail-page field-row selectors were not fully provided.",
+    "Capacity and explorer sections were observed but their exact field markup was not specified; extraction may therefore be lower confidence for those fields.",
+    "No review accordions were observed. The --mask-reviews option and masking helper are included, but this target's requested fields do not intentionally collect review text.",
+    "Dates are preserved exactly as rendered, including the future-dated sample values noted in the inspection.",
+    "The mandatory price rules are not applicable because this accommodation registry does not expose a product price field in the inspected requirements."
+  ],
+  "anti_bot_marker": null,
+  "total_tool_calls": 11
+}

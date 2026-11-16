@@ -1,0 +1,15 @@
+{
+  "confidence_notes": [
+    "The inspection found no populated result rows, so table row structure, detail hrefs, plus-icon behavior, pagination state, export download behavior, and detail selectors remain unverified.",
+    "The script uses Playwright because the target is an ASP.NET WebForms page with postback state including __OSVSTATE; no API endpoint was observed.",
+    "Because detail links were not available during inspection, href resolution is deliberately conservative and records a low-confidence flag when a row has no verified detail href.",
+    "Detail fields are extracted using label-based text matching rather than site-specific selectors because no detail page was reached.",
+    "The requested Capacidade column was not present among the observed headers; the script captures it if it appears in a returned table.",
+    "Product IDs use one consistent deterministic SHA-256-derived identifier from each detail URL, rather than mixing uncertain SKU and URL strategies.",
+    "The export filename uses the keyword directly and may require sanitization for keywords containing filesystem-reserved characters; this was not specified in the findings.",
+    "No cookie banner or anti-bot challenge was observed during inspection; challenge detection and diagnostic handling are included as required.",
+    "Generated code had Python syntax error on line 147: invalid syntax"
+  ],
+  "anti_bot_marker": null,
+  "total_tool_calls": 12
+}

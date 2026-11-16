@@ -1,0 +1,92 @@
+{
+  "root_cause": "The live site is an ASP.NET postback application. The search results do load successfully, but the scraper's extraction logic is brittle: it assumes detail fields are label/value table rows with labels such as 'Entity Name' and 'Current Status', while the live detail page uses text such as 'Summary for:', 'Entity type:', and 'Identification Number:'. The live status field is not present in the inspected summary. The prior zero-row failure was therefore not caused by HTTP blocking or a missing results grid; it indicates the test execution did not successfully complete the ASP.NET search/postback or used selectors/code from a different page state. The current live selectors produce 25 first-page rows and a page-2 link.",
+  "diagnostic_findings": {
+    "root_cause": "The live site is an ASP.NET postback application. The search results do load successfully, but the scraper's extraction logic is brittle: it assumes detail fields are label/value table rows with labels such as 'Entity Name' and 'Current Status', while the live detail page uses text such as 'Summary for:', 'Entity type:', and 'Identification Number:'. The live status field is not present in the inspected summary. The prior zero-row failure was therefore not caused by HTTP blocking or a missing results grid; it indicates the test execution did not successfully complete the ASP.NET search/postback or used selectors/code from a different page state. The current live selectors produce 25 first-page rows and a page-2 link.",
+    "page_type": "both",
+    "cookie_banner": "No cookie-consent banner, popup, modal overlay, CAPTCHA, Cloudflare challenge, or WAF challenge was observed. No dismissal was required.",
+    "working_listing_selectors": {
+      "search_page": "#MainContent_rdoByEntityName",
+      "entity_name_input": "#MainContent_txtEntityName",
+      "search_type_dropdown": "#MainContent_ddBeginsWithEntityName",
+      "search_submit": "#MainContent_btnSearch",
+      "results_grid": "#MainContent_SearchControl_grdSearchResultsEntity",
+      "result_rows": "#MainContent_SearchControl_grdSearchResultsEntity tr.GridRow, #MainContent_SearchControl_grdSearchResultsEntity tr.GridAltRow",
+      "result_detail_links": "#MainContent_SearchControl_grdSearchResultsEntity a.link[href*='CorpSummary.aspx']",
+      "pagination_page_2": "#MainContent_SearchControl_grdSearchResultsEntity a[href*=\"Page$2\"]"
+    },
+    "working_detail_selectors": {
+      "summary_container": "table.center",
+      "entity_name_container": "#MainContent_tblEntity",
+      "entity_name_text": "#MainContent_tblEntity",
+      "entity_type_container": "#MainContent_tblEntityType",
+      "id_number_container": "#MainContent_tblIDNumber",
+      "principal_office_container": "#MainContent_tblPrincipleOffice",
+      "principal_office_address_rows": "#MainContent_tblPrincipleOffice tr",
+      "status": "No verified dedicated status selector; 'Current Status' was not visible on the inspected detail page",
+      "detail_url_pattern": "/CorpWeb/CorpSearch/CorpSummary.aspx?sysvalue=<opaque-value>"
+    },
+    "working_price_selector": "none; this is a corporate registry and no product pricing or buy-box element exists",
+    "search_flow": {
+      "verified": true,
+      "steps": [
+        "Navigate to https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSearch.aspx",
+        "Ensure #MainContent_rdoByEntityName is checked",
+        "Fill #MainContent_txtEntityName with 'mobius'",
+        "Select option value 'B' in #MainContent_ddBeginsWithEntityName",
+        "Click #MainContent_btnSearch",
+        "Wait for #MainContent_SearchControl_grdSearchResultsEntity",
+        "Results navigate to https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSearchResults.aspx"
+      ],
+      "observed_result": "25 result rows on page 1, with a numeric page-2 postback link"
+    },
+    "navigation_path": [
+      "Search form is initially at CorpSearch.aspx",
+      "Search submission is an ASP.NET postback and changes the URL to CorpSearchResults.aspx",
+      "Extract rows matching GridRow/GridAltRow within #MainContent_SearchControl_grdSearchResultsEntity",
+      "Open each row's a.link[href*='CorpSummary.aspx']",
+      "Detail pages use CorpSummary.aspx?sysvalue=...",
+      "Pagination uses javascript:__doPostBack('ctl00$MainContent$SearchControl$grdSearchResultsEntity','Page$2') and should be followed by waiting for the grid/page content to update"
+    ],
+    "network_api": "No clean JSON endpoint for corporation data was observed. Search and pagination are ASP.NET form/postback operations. The observed JSON requests to the obfuscated Cut-to-treatheir-Gorgesseruant-Tyrantiencht endpoint appear to be site security/telemetry tokens, not entity data. Swiftype endpoints were unrelated site-search assets.",
+    "sample_extracted_fields": {
+      "listing_entity_name": "MOBIUS BIOMEDICAL INC.",
+      "listing_id_number": "001277200",
+      "listing_address": "600 SUFFOLK ST., 2ND FLOOR LOWELL, MA 01854 USA",
+      "detail_entity_name": "ENQUYST TECHNOLOGIES INC.",
+      "detail_id_number": "001277200",
+      "detail_entity_type": "Foreign Corporation",
+      "detail_principal_office_address": "600 SUFFOLK ST., 2ND FLOOR LOWELL, MA 01854 USA",
+      "detail_url": "https://corp.sec.state.ma.us/CorpWeb/CorpSearch/CorpSummary.aspx?sysvalue=I1J5plpq33x0EaRHKSdKIK7EMLsnxfnZmAtqWM9o7e4-",
+      "detail_name_change_note": "The name was changed from: MOBIUS BIOMEDICAL INC. on 02-22-2023",
+      "current_status": ""
+    },
+    "diagnostic_notes": [
+      "Do not rely on the requested CorpSearchResults.aspx URL before submission; the initial form is CorpSearch.aspx and the results URL appears only after the postback.",
+      "Wait explicitly for #MainContent_SearchControl_grdSearchResultsEntity after clicking the submit input.",
+      "Use the broader verified detail-link selector a[href*='CorpSummary.aspx']; the class-qualified selector is valid for observed rows but unnecessarily restrictive.",
+      "The first result demonstrates that the searched former name can differ from the current detail summary name; preserve both only if needed, and use the listing name for the requested Entity Name if that is the intended search-result value.",
+      "Parse detail values from the actual text patterns: 'Summary for:', 'Entity type:', 'Identification Number:', and the Address/City rows under #MainContent_tblPrincipleOffice.",
+      "The existing table_field fallback that expects the first cell to equal 'Entity Name' will fail for #MainContent_tblEntity because its content is 'Summary for: ENQUYST TECHNOLOGIES INC.'.",
+      "Current Status is not exposed in the inspected summary DOM; emit an empty value plus a missing-field flag rather than inventing one.",
+      "Pagination must target numeric postback anchors such as href containing Page$2; do not look for a literal Next link because only '2' was observed.",
+      "The results page contains 25 rows for mobius, not 33 on the observed run; total result counts may vary.",
+      "No price extraction is applicable.",
+      "Registered-agent and officer tables contain PII and should remain excluded or masked as requested."
+    ],
+    "confidence_notes": [
+      "Page 2 was not opened during this inspection, so its exact row count and final pagination state remain unverified.",
+      "The observed detail page was the first result and its current entity name differed from the result-grid name because the entity had a recorded name change.",
+      "No dedicated Current Status element was visible in the inspected detail page; status may be represented elsewhere for some entity types or may be unavailable.",
+      "The browser snapshot's discovered obfuscated JSON requests are not confirmed as corporation-data APIs and should not be used as a data source."
+    ]
+  },
+  "confidence_notes": [
+    "Uses the verified ASP.NET selectors for the entity-name radio button, search input, Begins with dropdown, submit button, results grid, result rows, detail links, and Page$ pagination postbacks.",
+    "Detail extraction handles the live text patterns Summary for:, Entity type:, and Identification Number:, and emits an empty Current Status with a missing-field flag when no verified status element exists.",
+    "The direct detail_url path is independent of listing discovery and uses DIRECT_INPUT provenance.",
+    "Pagination waits for network idle and a changed grid signature, while numeric Page$ links are supported instead of requiring a literal Next link.",
+    "Bot-protection markers and HTTP 403/429 responses fail fast without retries; zero-record runs capture diagnostic_screenshot.png and exit with status 1.",
+    "Workbook writing preserves custom sheets and prior Extracted Data column headers, including legacy fields, while sanitizing every exported cell to the Excel-safe length.",
+    "Reviewer and officer/registered-agent accordions are never opened or extracted; configured masking is applied to extracted text."
+  ]
+}
